@@ -138,7 +138,7 @@
   }
 
   .node{position:absolute; width:30%; aspect-ratio:1/1;}
-  .node[data-pos="top"]{left:35%; top:8%;}
+  .node[data-pos="top"]{left:32%; top:4%; width:36%;}
   .node[data-pos="left"]{left:8%; top:55%;}
   .node[data-pos="right"]{left:62%; top:55%;}
 
@@ -148,6 +148,10 @@
     border:2px solid var(--green-dim);
     box-shadow:0 0 0 rgba(61,255,198,0);
     transition:border-color .4s ease, box-shadow .4s ease;
+  }
+  /* BALTHASAR sits upright as a square, as in the original panel. */
+  .node[data-pos="top"] .diamond-inner{
+    transform:none;
   }
   .node.conf-pending .diamond-inner{border-color:var(--green-dim);}
   .node.conf-busy .diamond-inner{
@@ -168,8 +172,8 @@
   }
   /* Top diamond reads upright. */
   .node[data-pos="top"] .diamond-content{
-    left:16%; top:16%; width:68%; height:68%;
-    transform:rotate(0deg);
+    left:12%; top:12%; width:76%; height:76%;
+    transform:none;
   }
   /* Left diamond reads along the right-leaning diagonal. */
   .node[data-pos="left"] .diamond-content{
@@ -422,6 +426,11 @@
   .stamp.approved{color:var(--green-core); text-shadow:0 0 14px rgba(61,255,198,0.6);}
   .stamp.pending{color:var(--amber); text-shadow:0 0 14px rgba(255,176,32,0.6);}
   .stamp.rejected{color:var(--red); text-shadow:0 0 14px rgba(255,77,77,0.6);}
+  .stamp.conclusion{
+    color:var(--green-core); border-style:solid; border-width:2px;
+    transform:none; letter-spacing:4px; font-size:clamp(16px,5.5vw,22px);
+    text-shadow:0 0 12px rgba(61,255,198,0.5);
+  }
 
   .final-box{
     border:1px solid var(--green-core); background:rgba(61,255,198,0.05); border-radius:2px;
@@ -661,7 +670,7 @@ const NODES = {
 };
 const NODE_ORDER = ['melchior','balthasar','casper'];
 
-const SUPREME_SYSTEM = "당신은 MAGI 시스템 전체를 지배하는 최상위 통합 판단 AI입니다. 스스로를 'MAGI'라고만 칭합니다.\n\n아래는 세 연산 노드가 독립적으로 사고한 뒤(1차), 서로를 비판하며 정교화한(2차) 최종 결과입니다:\n- MELCHIOR-1: 이론·논리 (도덕성 미고려)\n- BALTHASAR-2: 감성·도덕\n- CASPER-3: 창의·비판\n\n당신의 임무는 어느 한쪽에 치우치지 않고, 각 노드의 신뢰도와 논거의 타당성을 종합적으로 고려하여 최종 결론을 내리는 것입니다. 논리만 따르지도, 감정만 따르지도 않으며, 세 관점을 실제로 통합한 균형잡힌 결론을 도출하십시오. 모든 답변은 한국어로 작성합니다.\n\n반드시 아래 JSON 형식으로만 답하십시오. 그 외의 설명, 마크다운 코드블록은 절대 포함하지 마십시오.\n{\"verdict\": \"가결 또는 보류 또는 기각 중 사안의 성격에 맞는 하나\", \"final_answer\": \"최종 결론 (구체적이고 실행 가능하게, 4~8문장)\", \"reasoning\": \"세 노드의 의견을 어떻게 반영했는지 포함한 판단 근거 (3~6문장)\", \"confidence\": 0에서 100 사이의 정수, \"influence\": {\"melchior\": 정수, \"balthasar\": 정수, \"casper\": 정수}}\n\ninfluence는 최종 결론에 각 노드의 의견이 실제로 반영된 비율입니다. 세 값의 합은 반드시 100이어야 합니다." + NAMING_RULE;
+const SUPREME_SYSTEM = "당신은 MAGI 시스템 전체를 지배하는 최상위 통합 판단 AI입니다. 스스로를 'MAGI'라고만 칭합니다.\n\n아래는 세 연산 노드가 독립적으로 사고한 뒤(1차), 서로를 비판하며 정교화한(2차) 최종 결과입니다:\n- MELCHIOR-1: 이론·논리 (도덕성 미고려)\n- BALTHASAR-2: 감성·도덕\n- CASPER-3: 창의·비판\n\n당신의 임무는 어느 한쪽에 치우치지 않고, 각 노드의 신뢰도와 논거의 타당성을 종합적으로 고려하여 최종 결론을 내리는 것입니다. 논리만 따르지도, 감정만 따르지도 않으며, 세 관점을 실제로 통합한 균형잡힌 결론을 도출하십시오. 모든 답변은 한국어로 작성합니다.\n\n반드시 아래 JSON 형식으로만 답하십시오. 그 외의 설명, 마크다운 코드블록은 절대 포함하지 마십시오.\n{\"query_type\": \"decision 또는 open 중 하나\", \"verdict\": \"query_type이 decision일 때만 가결/보류/기각 중 하나, open이면 빈 문자열\", \"final_answer\": \"최종 결론 (구체적이고 실행 가능하게, 4~8문장)\", \"reasoning\": \"세 노드의 의견을 어떻게 반영했는지 포함한 판단 근거 (3~6문장)\", \"confidence\": 0에서 100 사이의 정수, \"influence\": {\"melchior\": 정수, \"balthasar\": 정수, \"casper\": 정수}}\n\ninfluence는 최종 결론에 각 노드의 의견이 실제로 반영된 비율입니다. 세 값의 합은 반드시 100이어야 합니다.\n\nquery_type 판별 기준:\n- decision: 찬반, 채택 여부, 실행 여부, 옳고 그름 등 어떤 안건에 대한 가부 판단을 요구하는 질의. 이때만 verdict에 가결/보류/기각을 채웁니다.\n- open: 설명, 분석, 해설, 방법 제시, 비교, 서술형 답변을 요구하는 질의. 이때 verdict는 반드시 빈 문자열로 두십시오. 억지로 가부를 판정하지 마십시오." + NAMING_RULE;
 
 /* ---------------------------------------------------------------------
    PROVIDERS
@@ -857,8 +866,11 @@ function normalizeNodeResult(parsed, raw){
 }
 function normalizeFinalResult(parsed, raw){
   const allowed = ['가결','보류','기각'];
-  let verdict = String(pick(parsed, ['verdict','판정','결정']) || '보류').trim();
-  if(!allowed.includes(verdict)) verdict = '보류';
+  const qt = String(pick(parsed, ['query_type','queryType','유형']) || '').trim().toLowerCase();
+  let verdict = String(pick(parsed, ['verdict','판정','결정']) || '').trim();
+  // Only stamp a verdict when the model actually returned one for a decision.
+  const isDecision = (qt === 'decision') && allowed.includes(verdict);
+  if(!isDecision) verdict = '';
   const fa = pick(parsed, ['final_answer','finalAnswer','answer','최종답변']);
   return {
     verdict: verdict,
@@ -1819,7 +1831,7 @@ function buildRoundDOM(n, question, fileNames){
     '<div class="verdict-wrap" id="r' + n + '-verdict">' +
       '<div class="stamp pending" data-role="stamp">보류</div>' +
       '<div class="final-box">' +
-        '<div class="lbl">FINAL_ANSWER ── 통합 판단 AI</div>' +
+        '<div class="lbl" data-role="anslbl">FINAL_ANSWER ── 통합 판단 AI</div>' +
         '<div class="answer" data-role="answer"></div>' +
         '<div class="lbl">REASONING</div>' +
         '<div class="reasoning" data-role="reasoning"></div>' +
@@ -1926,8 +1938,18 @@ function renderFinal(fin, p2results){
   wrap.classList.add('show');
   const map = { '가결':'approved', '보류':'pending', '기각':'rejected' };
   const stamp = wrap.querySelector('[data-role="stamp"]');
-  stamp.className = 'stamp ' + (map[fin.verdict] || 'pending');
-  stamp.textContent = fin.verdict;
+  if(fin.verdict){
+    stamp.className = 'stamp ' + (map[fin.verdict] || 'pending');
+    stamp.textContent = fin.verdict;
+  } else {
+    // Open-ended query: no gavel, just a heading.
+    stamp.className = 'stamp conclusion';
+    stamp.textContent = '답변';
+  }
+  const lbl = wrap.querySelector('[data-role="anslbl"]');
+  if(lbl) lbl.textContent = fin.verdict
+    ? 'FINAL_VERDICT ── 통합 판단 AI'
+    : 'FINAL_ANSWER ── 통합 판단 AI';
   wrap.querySelector('[data-role="answer"]').textContent = fin.final_answer;
   wrap.querySelector('[data-role="reasoning"]').textContent = fin.reasoning;
   wrap.querySelector('[data-role="conf"]').textContent = 'MAGI 종합 신뢰도: ' + fin.confidence + '%';
