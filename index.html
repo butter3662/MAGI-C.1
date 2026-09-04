@@ -1148,8 +1148,10 @@ function modelsFor(provider){
   const cached = state.modelCache[provider];
   return (cached && cached.length) ? cached : PROVIDERS[provider].models;
 }
+function isFreeModel(id){ return /:free$/.test(id) || id === 'openrouter/free'; }
+function modelLabel(id){ return escapeHtml(id) + (isFreeModel(id) ? '  · 무료' : ''); }
 function optionList(ids, current){
-  let html = ids.map(m=>'<option value="'+escapeHtml(m)+'">'+escapeHtml(m)+'</option>').join('');
+  let html = ids.map(m=>'<option value="'+escapeHtml(m)+'">'+modelLabel(m)+'</option>').join('');
   if(current && ids.indexOf(current) === -1){
     html = '<option value="'+escapeHtml(current)+'">'+escapeHtml(current)+' (직접 입력)</option>' + html;
   }
@@ -1561,36 +1563,69 @@ async function fetchModelList(provider, key){
   return ['openrouter/free'].concat(free, rest).slice(0, 120);
 }
 
+// OpenRouter's model list is public, so it can load without a key.
+async function autoLoadOpenRouterModels(){
+  if(state.modelCache.openrouter && state.modelCache.openrouter.length) return;
+  try{
+    const ids = await fetchModelList('openrouter', '');
+    if(ids.length){
+      state.modelCache.openrouter = ids;
+      renderSharedModelOptions();
+      renderAllNodeModelOptions();
+    }
+  }catch(e){ /* offline or blocked - fall back to the built-in list */ }
+}
+
 async function loadModelList(){
-  const p = state.provider;
-  const key = sanitizeKey(apiKeyInput.value);
-  if(p !== 'openrouter' && !key){
+  const active = state.provider;
+  syncCurrentKey();
+
+  // Fetch the active provider plus any other provider that already has a key,
+  // so per-node dropdowns for other companies fill in too.
+  const targets = [active];
+  PROVIDER_ORDER.forEach(p=>{
+    if(p === active) return;
+    if(p === 'openrouter' || sanitizeKey(state.keys[p]||'')) targets.push(p);
+  });
+
+  if(active !== 'openrouter' && !sanitizeKey(state.keys[active]||'')){
     modelListResult.textContent = '목록을 불러오려면 API 키를 먼저 입력하세요.';
     modelListResult.style.color = 'var(--red)';
     return;
   }
+
   fetchModelsBtn.disabled = true;
   const prev = fetchModelsBtn.textContent;
   fetchModelsBtn.textContent = '...';
   modelListResult.textContent = '';
-  try{
-    const ids = await fetchModelList(p, key);
-    if(!ids.length) throw new Error('사용 가능한 모델이 없습니다');
-    state.modelCache[p] = ids;
-    // If the current model is not offered, switch to the first one that is.
-    if(ids.indexOf(modelShared.value.trim()) === -1) modelShared.value = ids[0];
-    renderSharedModelOptions();
-    renderAllNodeModelOptions();
-    scheduleSave();
-    modelListResult.textContent = '✓ ' + ids.length + '개 모델을 불러왔습니다. 위 목록에서 고르세요.';
-    modelListResult.style.color = 'var(--green-core)';
-  }catch(e){
-    modelListResult.textContent = '✗ 목록을 불러오지 못했습니다 (' + (e.message||'오류') + '). 키가 맞는지 확인하세요.';
-    modelListResult.style.color = 'var(--red)';
-  }finally{
-    fetchModelsBtn.disabled = false;
-    fetchModelsBtn.textContent = prev;
+
+  const ok = [], failed = [];
+  for(const p of targets){
+    try{
+      const ids = await fetchModelList(p, sanitizeKey(state.keys[p]||''));
+      if(ids.length){ state.modelCache[p] = ids; ok.push(PROVIDERS[p].label + ' ' + ids.length); }
+      else failed.push(PROVIDERS[p].label);
+    }catch(e){
+      failed.push(PROVIDERS[p].label);
+    }
   }
+
+  const activeIds = state.modelCache[active];
+  if(activeIds && activeIds.indexOf(modelShared.value.trim()) === -1) modelShared.value = activeIds[0];
+  renderSharedModelOptions();
+  renderAllNodeModelOptions();
+  scheduleSave();
+
+  if(ok.length){
+    modelListResult.textContent = '✓ 불러옴 — ' + ok.join(', ')
+      + (failed.length ? ' / 실패: ' + failed.join(', ') : '');
+    modelListResult.style.color = 'var(--green-core)';
+  } else {
+    modelListResult.textContent = '✗ 목록을 불러오지 못했습니다. 키가 맞는지 확인하세요.';
+    modelListResult.style.color = 'var(--red)';
+  }
+  fetchModelsBtn.disabled = false;
+  fetchModelsBtn.textContent = prev;
 }
 
 /* ---------------------------------------------------------------------
@@ -2144,6 +2179,7 @@ function init(){
   });
 
   loadSettings();
+  autoLoadOpenRouterModels();
 }
 
 if(document.readyState === 'loading'){
