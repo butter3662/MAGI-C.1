@@ -552,9 +552,14 @@
 
     <label>사용 모델 (공용)</label>
     <div class="keyrow">
-      <select id="modelSelect" class="nodesel" style="flex:1;min-width:0;"></select>
+      <input type="text" id="modelFilter" placeholder="모델 검색 (예: gpt-oss, nemotron)">
       <button class="iconbtn" id="fetchModelsBtn">목록</button>
     </div>
+    <label class="strict-line" style="margin-top:6px;">
+      <input type="checkbox" id="freeOnlyToggle" checked>
+      <span>무료 모델만 보기</span>
+    </label>
+    <select id="modelSelect" class="nodesel" style="width:100%;margin-top:6px;"></select>
     <input type="text" id="modelShared" placeholder="모델 ID 직접 입력" hidden>
     <div class="key-check-result" id="modelListResult"></div>
     <div class="hint" id="modelHint"></div>
@@ -701,6 +706,8 @@ const keyLabel = $('keyLabel');
 const keyHint = $('keyHint');
 const modelHint = $('modelHint');
 const modelSelect = $('modelSelect');
+const modelFilter = $('modelFilter');
+const freeOnlyToggle = $('freeOnlyToggle');
 const strictToggle = $('strictToggle');
 const fetchModelsBtn = $('fetchModelsBtn');
 const modelListResult = $('modelListResult');
@@ -935,6 +942,7 @@ function applySettingsToForm(obj){
   });
   debugToggle.checked = !!obj.debug;
   strictToggle.checked = !!obj.strict;
+  if(obj.freeOnly !== undefined) freeOnlyToggle.checked = !!obj.freeOnly;
   renderAllNodeModelOptions();
   advModels.classList.toggle('show', diffModelToggle.checked);
   document.body.classList.toggle('debug-on', debugToggle.checked);
@@ -951,7 +959,8 @@ async function doSave(){
     models: SLOTS.reduce((o,slot)=>{ const f=modelField(slot); o[slot]=f?f.value.trim():''; return o; }, {}),
     nodeProviders: SLOTS.reduce((o,slot)=>{ const f=provField(slot); o[slot]=f?f.value:''; return o; }, {}),
     debug: debugToggle.checked,
-    strict: strictToggle.checked
+    strict: strictToggle.checked,
+    freeOnly: freeOnlyToggle.checked
   };
   try{
     const ok = await storageWrite(JSON.stringify(obj));
@@ -1159,20 +1168,48 @@ function optionList(ids, current){
   }
   return html;
 }
+function applyFilter(ids){
+  const q = (modelFilter && modelFilter.value.trim().toLowerCase()) || '';
+  const match = list => q ? list.filter(id => id.toLowerCase().indexOf(q) !== -1) : list;
+
+  if(freeOnlyToggle && freeOnlyToggle.checked){
+    const free = ids.filter(isFreeModel);
+    const hit = match(free);
+    // A search that matches nothing free should still find paid models.
+    if(hit.length || !q) return hit.length ? hit : match(ids);
+    return match(ids);
+  }
+  return match(ids);
+}
 function renderSharedModelOptions(){
-  const ids = modelsFor(state.provider);
+  const all = modelsFor(state.provider);
   const cur = modelShared.value.trim();
-  modelSelect.innerHTML = optionList(ids, cur) +
+  const shown = applyFilter(all);
+  if(!shown.length){
+    modelSelect.innerHTML = '<option value="">검색 결과 없음</option>' +
+      '<option value="'+CUSTOM+'">직접 입력...</option>';
+    return;
+  }
+  modelSelect.innerHTML = optionList(shown, cur) +
     '<option value="'+CUSTOM+'">직접 입력...</option>';
-  modelSelect.value = cur || ids[0] || '';
-  if(!modelShared.value.trim() && modelSelect.value) modelShared.value = modelSelect.value;
+  modelSelect.value = (shown.indexOf(cur) !== -1) ? cur : shown[0];
+  if(modelSelect.value && modelSelect.value !== CUSTOM) modelShared.value = modelSelect.value;
+  const total = all.length;
+  if(modelListResult && (modelFilter.value.trim() || freeOnlyToggle.checked)){
+    modelListResult.textContent = shown.length + ' / ' + total + '개 표시 중';
+    modelListResult.style.color = 'var(--text-dim)';
+  }
 }
 function renderNodeModelOptions(slot){
   const sel = modelField(slot);
   if(!sel) return;
   const cfgProvider = (provField(slot) && provField(slot).value) || state.provider;
   const cur = sel.value;
-  const ids = modelsFor(cfgProvider);
+  let ids = modelsFor(cfgProvider);
+  if(freeOnlyToggle && freeOnlyToggle.checked){
+    const f = ids.filter(isFreeModel);
+    if(f.length) ids = f;
+  }
   sel.innerHTML = '<option value="">기본 모델 사용</option>' + optionList(ids, cur);
   sel.value = (cur && (ids.indexOf(cur) !== -1)) ? cur : '';
 }
@@ -2153,6 +2190,12 @@ function init(){
   });
   [apiKeyInput, modelShared].forEach(el=>{
     el.addEventListener('input', ()=>{ scheduleSave(); refreshNodeKeyStatus(); });
+  });
+  modelFilter.addEventListener('input', renderSharedModelOptions);
+  freeOnlyToggle.addEventListener('change', ()=>{
+    renderSharedModelOptions();
+    renderAllNodeModelOptions();
+    scheduleSave();
   });
   modelSelect.addEventListener('change', ()=>{
     if(modelSelect.value === CUSTOM){
