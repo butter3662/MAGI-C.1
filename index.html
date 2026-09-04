@@ -236,6 +236,12 @@
   .node-cfg{margin-bottom:9px;}
   .cfg-row{display:flex; gap:5px;}
   .cfg-row select{flex:0 0 40%;}
+  .nodefilter{
+    flex:1; min-width:0; background:#020a06; border:1px solid var(--green-dim);
+    color:var(--text-main); font-family:var(--font-mono); font-size:12px;
+    padding:9px 8px; border-radius:2px; outline:none;
+  }
+  .nodefilter:focus{border-color:var(--green-core);}
   .cfg-row input{flex:1; min-width:0;}
   .nodesel{
     background:#020a06; border:1px solid var(--green-dim); color:var(--text-main);
@@ -576,29 +582,33 @@
         <label>MELCHIOR-1 · 이론 · 논리</label>
         <div class="cfg-row">
           <select id="provMelchior" class="nodesel"></select>
-          <select id="modelMelchior" class="nodesel" style="min-width:0;"></select>
+          <input type="text" id="filterMelchior" class="nodefilter" placeholder="모델 검색">
         </div>
+        <select id="modelMelchior" class="nodesel" style="width:100%;margin-top:5px;"></select>
       </div>
       <div class="node-cfg">
         <label>BALTHASAR-2 · 감성 · 도덕</label>
         <div class="cfg-row">
           <select id="provBalthasar" class="nodesel"></select>
-          <select id="modelBalthasar" class="nodesel" style="min-width:0;"></select>
+          <input type="text" id="filterBalthasar" class="nodefilter" placeholder="모델 검색">
         </div>
+        <select id="modelBalthasar" class="nodesel" style="width:100%;margin-top:5px;"></select>
       </div>
       <div class="node-cfg">
         <label>CASPER-3 · 창의 · 비판</label>
         <div class="cfg-row">
           <select id="provCasper" class="nodesel"></select>
-          <select id="modelCasper" class="nodesel" style="min-width:0;"></select>
+          <input type="text" id="filterCasper" class="nodefilter" placeholder="모델 검색">
         </div>
+        <select id="modelCasper" class="nodesel" style="width:100%;margin-top:5px;"></select>
       </div>
       <div class="node-cfg">
         <label>최종 판정 AI</label>
         <div class="cfg-row">
           <select id="provSupreme" class="nodesel"></select>
-          <select id="modelSupreme" class="nodesel" style="min-width:0;"></select>
+          <input type="text" id="filterSupreme" class="nodefilter" placeholder="모델 검색">
         </div>
+        <select id="modelSupreme" class="nodesel" style="width:100%;margin-top:5px;"></select>
       </div>
 
       <div class="key-check-result" id="nodeKeyStatus"></div>
@@ -1121,6 +1131,7 @@ const SLOT_LABEL = {
 };
 function provField(slot){ return $('prov' + slot.charAt(0).toUpperCase() + slot.slice(1)); }
 function modelField(slot){ return $('model' + slot.charAt(0).toUpperCase() + slot.slice(1)); }
+function filterField(slot){ return $('filter' + slot.charAt(0).toUpperCase() + slot.slice(1)); }
 
 // Keep the key currently typed in the box attached to its provider.
 function syncCurrentKey(){
@@ -1205,13 +1216,28 @@ function renderNodeModelOptions(slot){
   if(!sel) return;
   const cfgProvider = (provField(slot) && provField(slot).value) || state.provider;
   const cur = sel.value;
-  let ids = modelsFor(cfgProvider);
+  const all = modelsFor(cfgProvider);
+
+  const ff = filterField(slot);
+  const q = (ff && ff.value.trim().toLowerCase()) || '';
+  const match = list => q ? list.filter(id => id.toLowerCase().indexOf(q) !== -1) : list;
+
+  let ids;
   if(freeOnlyToggle && freeOnlyToggle.checked){
-    const f = ids.filter(isFreeModel);
-    if(f.length) ids = f;
+    const free = all.filter(isFreeModel);
+    const hit = match(free);
+    // A search with no free match should still reach paid models.
+    ids = hit.length ? hit : match(all);
+  } else {
+    ids = match(all);
   }
-  sel.innerHTML = '<option value="">기본 모델 사용</option>' + optionList(ids, cur);
-  sel.value = (cur && (ids.indexOf(cur) !== -1)) ? cur : '';
+
+  // Never drop the current selection just because it is filtered out.
+  if(cur && ids.indexOf(cur) === -1) ids = [cur].concat(ids);
+
+  const count = q ? (' (' + ids.length + '/' + all.length + ')') : '';
+  sel.innerHTML = '<option value="">기본 모델 사용' + count + '</option>' + optionList(ids, cur);
+  sel.value = (cur && ids.indexOf(cur) !== -1) ? cur : '';
 }
 function renderAllNodeModelOptions(){ SLOTS.forEach(renderNodeModelOptions); }
 
@@ -2212,8 +2238,9 @@ function init(){
   modelShared.addEventListener('change', ()=>{ renderSharedModelOptions(); renderAllNodeModelOptions(); });
   strictToggle.addEventListener('change', scheduleSave);
   SLOTS.forEach(slot=>{
-    const mf = modelField(slot), pf = provField(slot);
-    if(mf) mf.addEventListener('input', scheduleSave);
+    const mf = modelField(slot), pf = provField(slot), ff = filterField(slot);
+    if(ff) ff.addEventListener('input', ()=>renderNodeModelOptions(slot));
+    if(mf) mf.addEventListener('change', scheduleSave);
     if(pf) pf.addEventListener('change', ()=>{
       const m = modelField(slot);
       if(m) m.value = '';               // model belonged to the previous company
