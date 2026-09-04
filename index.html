@@ -1148,7 +1148,9 @@ function modelsFor(provider){
   const cached = state.modelCache[provider];
   return (cached && cached.length) ? cached : PROVIDERS[provider].models;
 }
-function isFreeModel(id){ return /:free$/.test(id) || id === 'openrouter/free'; }
+function isFreeModel(id){
+  return freeModelIds.has(id) || /:free$/.test(id) || id === 'openrouter/free';
+}
 function modelLabel(id){ return escapeHtml(id) + (isFreeModel(id) ? '  · 무료' : ''); }
 function optionList(ids, current){
   let html = ids.map(m=>'<option value="'+escapeHtml(m)+'">'+modelLabel(m)+'</option>').join('');
@@ -1509,6 +1511,8 @@ async function verifyApiKey(){
    Live model list
    Model names change often, so ask the provider instead of hardcoding.
 --------------------------------------------------------------------- */
+let freeModelIds = new Set();
+
 function isChatModelId(provider, id){
   const s = id.toLowerCase();
   const banned = /embed|embedding|imagen|veo|whisper|tts|speech|transcribe|audio|moderation|dall-e|image|rerank|lyria|robotics|nano-banana/;
@@ -1553,14 +1557,24 @@ async function fetchModelList(provider, key){
     return (d.data||[]).map(m=>m.id).filter(id=>id && isChatModelId(provider, id)).sort();
   }
 
-  // OpenRouter lists hundreds of models, so surface free ones first.
+  // OpenRouter lists 300+ models. Free ones are identified by price, not by a
+  // name suffix, so read the pricing fields and surface those first.
   const r = await fetch('https://openrouter.ai/api/v1/models');
   if(!r.ok) throw new Error('HTTP ' + r.status);
   const d = await r.json();
-  const all = (d.data||[]).map(m=>m.id).filter(id=>id && isChatModelId(provider, id));
-  const free = all.filter(id=>/:free$/.test(id)).sort();
-  const rest = all.filter(id=>!/:free$/.test(id)).sort();
-  return ['openrouter/free'].concat(free, rest).slice(0, 120);
+  const all = (d.data||[]).filter(m => m && m.id && isChatModelId(provider, m.id));
+  const isFree = m => {
+    const pr = m.pricing || {};
+    const inP = parseFloat(pr.prompt || '0');
+    const outP = parseFloat(pr.completion || '0');
+    return isFinite(inP) && isFinite(outP) && inP === 0 && outP === 0;
+  };
+  const free = all.filter(isFree).map(m=>m.id).sort();
+  const rest = all.filter(m=>!isFree(m)).map(m=>m.id).sort();
+  freeModelIds = new Set(free);
+  freeModelIds.add('openrouter/free');
+  const ordered = ['openrouter/free'].concat(free, rest);
+  return ordered.filter((id,i)=>ordered.indexOf(id)===i);
 }
 
 // OpenRouter's model list is public, so it can load without a key.
