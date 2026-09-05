@@ -1791,7 +1791,7 @@ async function callAndParse(provider, apiKey, model, sys, user, temp, maxTok, re
     // A failed parse is most often a truncated reply, so give it more room.
     const budget = attempt===0 ? maxTok : maxTok * 2;
     try{
-      const raw = await callModel(provider, apiKey, model, sys, u, budget, atts);
+      const raw = await callModel(provider, apiKey, model, sys, u, temp, budget, atts);
       lastRaw = raw;
       const parsed = safeParseJSON(raw, requiredKeys);
       if(parsed) return { parsed: parsed, raw: raw };
@@ -1808,6 +1808,11 @@ async function callAndParse(provider, apiKey, model, sys, user, temp, maxTok, re
 }
 /* --- dispatcher --- */
 async function callModel(provider, apiKey, model, sys, user, temperature, maxTokens, atts){
+  // Guard against a bad argument reaching the API: providers reject temp > 2.
+  temperature = Number(temperature);
+  if(!isFinite(temperature) || temperature < 0 || temperature > 2) temperature = 0.5;
+  maxTokens = Math.max(64, Math.min(Number(maxTokens) || 1000, 32000));
+
   let text;
   if(provider==='openrouter') text = await callOpenRouter(apiKey, model, sys, user, temperature, maxTokens, atts);
   else if(provider==='gpt')   text = await callOpenAI(apiKey, model, sys, user, temperature, maxTokens, atts);
