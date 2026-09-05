@@ -1436,6 +1436,14 @@ function refreshNodeKeyStatus(){
 function isOpenAIReasoningModel(model){
   return /^(o\d|gpt-[5-9])/i.test(model);
 }
+// Reasoning models spend most of their budget thinking, so the visible answer
+// needs extra headroom or it comes back empty.
+function isReasoningModel(model){
+  return /(deepseek|-r1|reasoner|thinking|nemotron|qwq|glm|magistral|o\d)/i.test(String(model||''));
+}
+function budgetFor(model, base){
+  return isReasoningModel(model) ? base + 3000 : base;
+}
 
 async function httpJSON(url, options, providerName){
   let res;
@@ -1463,6 +1471,33 @@ async function httpJSON(url, options, providerName){
     throw err;
   }
   return res.json();
+}
+
+// Reasoning models (DeepSeek R1 and friends) often leave `content` empty and put
+// the text in `reasoning`. Accept either, across every provider's response shape.
+function extractAnyText(data){
+  if(!data) return '';
+  const ch = data.choices && data.choices[0];
+  if(ch && ch.message){
+    const c = ch.message.content;
+    if(typeof c === 'string' && c.trim()) return c;
+    if(Array.isArray(c)){
+      const j = c.map(b=>(b && typeof b.text === 'string') ? b.text : '').join('');
+      if(j.trim()) return j;
+    }
+    const r = ch.message.reasoning || ch.message.reasoning_content;
+    if(typeof r === 'string' && r.trim()) return r;
+  }
+  if(Array.isArray(data.content)){
+    const t = data.content.filter(b=>b && b.type==='text').map(b=>b.text).join('');
+    if(t.trim()) return t;
+  }
+  const cand = data.candidates && data.candidates[0];
+  if(cand && cand.content && Array.isArray(cand.content.parts)){
+    const t = cand.content.parts.filter(p=>p && typeof p.text==='string').map(p=>p.text).join('');
+    if(t.trim()) return t;
+  }
+  return '';
 }
 
 function baseHeaders(){
@@ -1495,12 +1530,16 @@ async function callOpenRouter(apiKey, model, sys, user, temperature, maxTokens, 
       model: model,
       messages:[{role:'system',content:sys},{role:'user',content:openAIContent(user, atts)}],
       temperature: temperature,
-      max_tokens: maxTokens
+      max_tokens: budgetFor(model, maxTokens)
     })
   }, 'OpenRouter');
 
-  const c = data && data.choices && data.choices[0] && data.choices[0].message;
-  return (c && c.content) || '';
+  // OpenRouter can return HTTP 200 with an error payload.
+  if(data && data.error){
+    const m = String((data.error.message || data.error) || '');
+    const e = new Error('OpenRouter — ' + m + '  [012]'); e.code = '012'; throw e;
+  }
+  return extractAnyText(data);
 }
 
 /* --- OpenAI --- */
@@ -1536,8 +1575,7 @@ async function callOpenAI(apiKey, model, sys, user, temperature, maxTokens, atts
     } else throw e;
   }
 
-  const c = data && data.choices && data.choices[0] && data.choices[0].message;
-  return (c && c.content) || '';
+  return extractAnyText(data);
 }
 
 /* --- Anthropic --- */
@@ -1884,7 +1922,9 @@ const ERROR_CODES = {
   '007': { t:'네트워크 오류', d:'제공사 서버에 연결하지 못했습니다. 인터넷 연결, 광고 차단 확장 프로그램, 또는 미리보기 환경에서 실행 중인지 확인하세요.', c:'bad' },
   '008': { t:'요청 형식 거부', d:'모델이 이 앱의 요청 형식을 받아들이지 않습니다. 대화형이 아닌 특수 목적 모델일 가능성이 큽니다. 다른 모델을 선택하세요.', c:'bad' },
   '009': { t:'키 미입력', d:'이 회사의 API 키가 아직 입력되지 않았습니다. 설정에서 해당 탭을 선택해 키를 입력하세요.', c:'bad' },
-  '010': { t:'원인 불명', d:'분류되지 않은 오류입니다. 잠시 후 재시도하거나 다른 모델을 선택해 보세요.', c:'warn' }
+  '010': { t:'원인 불명', d:'분류되지 않은 오류입니다. 잠시 후 재시도하거나 다른 모델을 선택해 보세요.', c:'warn' },
+  '011': { t:'빈 응답', d:'호출은 성공했지만 모델이 본문을 반환하지 않았습니다. 추론형 모델이 생각 과정에 토큰을 모두 소진했거나, 이 앱의 JSON 형식을 따르지 못하는 모델일 수 있습니다. 다른 모델을 선택하세요.', c:'bad' },
+  '012': { t:'제공사 내부 오류', d:'요청은 접수됐지만 제공사가 응답 본문에 오류를 담아 반환했습니다. 해당 모델이 일시적으로 내려갔거나 중개 서버가 모델을 찾지 못한 경우입니다.', c:'warn' }
 };
 
 function classifyStatus(status, msg){
@@ -1924,15 +1964,26 @@ async function probeModel(provider, key, model){
       url = (provider === 'gpt')
         ? 'https://api.openai.com/v1/chat/completions'
         : 'https://openrouter.ai/api/v1/chat/completions';
-      const body = { model:model, messages:[{role:'user',content:'hi'}] };
-      if(provider === 'gpt' && isOpenAIReasoningModel(model)) body.max_completion_tokens = 16;
-      else body.max_tokens = 1;
+      // Ask for a real (tiny) JSON body so reasoning models that burn their
+      // whole budget on thinking are caught here instead of mid-deliberation.
+      const body = { model:model, messages:[{role:'user',content:'{"ok":1} 만 출력하십시오.'}] };
+      if(provider === 'gpt' && isOpenAIReasoningModel(model)) body.max_completion_tokens = 400;
+      else body.max_tokens = 400;
       opts = { method:'POST', headers:{ 'Content-Type':'application/json',
                'Authorization':'Bearer ' + key }, body: JSON.stringify(body) };
     }
 
     const res = await fetch(url, opts);
-    if(res.ok) return { code:'000' };
+    if(res.ok){
+      // A 200 can still carry an error, or come back with no usable text.
+      let data = null;
+      try{ data = await res.json(); }catch(e){ return { code:'011' }; }
+      if(data && data.error){
+        const m = String((data.error.message || data.error) || '');
+        return { code: classifyStatus(data.error.code || 502, m), detail:m };
+      }
+      return extractAnyText(data) ? { code:'000' } : { code:'011' };
+    }
     let detail = '';
     try{
       const ej = await res.json();
