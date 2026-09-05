@@ -635,7 +635,7 @@
     <div class="keyrow">
       <input type="text" id="modelFilter" placeholder="모델 통합 검색 (예: gpt-oss, nemotron)">
       <button class="iconbtn" id="fetchModelsBtn">목록</button>
-      <button class="iconbtn" id="checkModelsBtn">확인</button>
+      <button class="iconbtn" id="checkModelsBtn">전체확인</button>
     </div>
     <label class="strict-line" style="margin-top:6px;">
       <input type="checkbox" id="freeOnlyToggle" checked>
@@ -851,7 +851,7 @@ const fileInput = $('fileInput');
 const fileChips = $('fileChips');
 const attachNote = $('attachNote');
 
-let state = { busy:false, codeNum:132, raw:{}, provider:'openrouter', keys:{}, files:[], history:[], round:0, modelCache:{} };
+let state = { busy:false, codeNum:132, raw:{}, provider:'openrouter', keys:{}, files:[], history:[], round:0, modelCache:{}, probeCache:{}, probeSeq:0 };
 
 /* ---------------------------------------------------------------------
    Utilities
@@ -2010,6 +2010,47 @@ function showAvail(el, code, modelName){
   }
 }
 
+// Probe one slot (or the shared model) and show the result inline.
+// Results are cached per provider+model so re-selecting is instant and free.
+async function checkOne(slot){
+  syncCurrentKey();
+  const cfg = slot ? nodeConfig(slot)
+                   : { provider: state.provider,
+                       model: modelShared.value.trim() || PROVIDERS[state.provider].defaultModel };
+  const el = availEl(slot);
+  if(!el) return;
+  if(!cfg.model){ el.textContent=''; el.className='avail'; return; }
+
+  const id = cfg.provider + '|' + cfg.model;
+  if(state.probeCache[id]){
+    showAvail(el, state.probeCache[id].code, cfg.model);
+    return;
+  }
+
+  const token = ++state.probeSeq;
+  el.className = 'avail checking';
+  el.textContent = '확인 중...';
+  const r = await probeModel(cfg.provider, sanitizeKey(state.keys[cfg.provider]||''), cfg.model);
+  state.probeCache[id] = r;
+  // A newer selection may have started while this was in flight.
+  if(token !== state.probeSeq && slot === null) return;
+  showAvail(el, r.code, cfg.model);
+
+  // Slots following the shared setting show the same result.
+  if(slot === null) SLOTS.forEach(sl=>{
+    if(!diffModelToggle.checked) return;
+    const c = nodeConfig(sl);
+    if(c.provider + '|' + c.model === id) showAvail(availEl(sl), r.code, c.model);
+  });
+}
+
+// Debounced so typing a custom model id does not fire a probe per keystroke.
+let probeTimer = null;
+function scheduleCheck(slot, delay){
+  clearTimeout(probeTimer);
+  probeTimer = setTimeout(()=>checkOne(slot), delay === undefined ? 350 : delay);
+}
+
 async function checkAllModels(){
   checkModelsBtn.disabled = true;
   const prev = checkModelsBtn.textContent;
@@ -2033,12 +2074,13 @@ async function checkAllModels(){
     if(el){ el.className='avail checking'; el.textContent='확인 중...'; }
   });
 
-  // Same provider+model is only probed once.
+  // Manual check forces a fresh probe; same provider+model still only once.
   const seen = {};
   for(const t of targets){
     const id = t.provider + '|' + t.model;
     if(seen[id] === undefined){
       seen[id] = await probeModel(t.provider, sanitizeKey(state.keys[t.provider]||''), t.model);
+      state.probeCache[id] = seen[id];
     }
     showAvail(availEl(t.slot), seen[id].code, t.model);
   }
@@ -2089,6 +2131,8 @@ function setProvider(p, opts){
   attachNote.textContent = (p==='claude' || p==='gemini')
     ? '이미지 · 텍스트 · PDF'
     : '이미지 · 텍스트 (PDF는 Claude/Gemini만)';
+  availShared.textContent = ''; availShared.className = 'avail';
+  if(!opts.initial) scheduleCheck(null, 0);
 
   const ids = modelsFor(p);
   if(ids.indexOf(modelShared.value.trim()) === -1) modelShared.value = cfg.defaultModel;
@@ -2632,9 +2676,16 @@ function init(){
     document.body.classList.toggle('debug-on', debugToggle.checked);
     scheduleSave();
   });
-  [apiKeyInput, modelShared].forEach(el=>{
-    el.addEventListener('input', ()=>{ scheduleSave(); refreshNodeKeyStatus(); });
+  apiKeyInput.addEventListener('input', ()=>{
+    scheduleSave();
+    refreshNodeKeyStatus();
+    // A new key can change what is usable, so drop cached verdicts for this provider.
+    Object.keys(state.probeCache).forEach(k=>{
+      if(k.indexOf(state.provider + '|') === 0) delete state.probeCache[k];
+    });
+    scheduleCheck(null, 900);
   });
+  modelShared.addEventListener('input', ()=>{ scheduleSave(); refreshNodeKeyStatus(); });
   modelFilter.addEventListener('input', ()=>{
     renderSharedModelOptions();
     renderAllNodeModelOptions();
@@ -2656,14 +2707,17 @@ function init(){
     }
     availShared.textContent = ''; availShared.className = 'avail';
     scheduleSave();
+    if(modelSelect.value !== CUSTOM) scheduleCheck(null, 0);
   });
   modelShared.addEventListener('change', ()=>{ renderSharedModelOptions(); renderAllNodeModelOptions(); });
+  modelShared.addEventListener('input', ()=>{ scheduleCheck(null, 700); });
   strictToggle.addEventListener('change', ()=>{ refreshNodeRoles(); scheduleSave(); });
   SLOTS.forEach(slot=>{
     const mf = modelField(slot), pf = provField(slot);
     if(mf) mf.addEventListener('change', scheduleSave);
     if(mf) mf.addEventListener('change', ()=>{
       const el = availEl(slot); if(el){ el.textContent=''; el.className='avail'; }
+      scheduleCheck(slot, 0);
     });
     if(pf) pf.addEventListener('change', ()=>{
       const m = modelField(slot);
@@ -2672,6 +2726,7 @@ function init(){
       renderNodeModelOptions(slot);
       refreshNodeKeyStatus();
       scheduleSave();
+      scheduleCheck(slot, 0);
     });
   });
   submitBtn.addEventListener('click', handleSubmit);
@@ -2687,7 +2742,12 @@ function init(){
     if(e.key==='Enter' && (e.metaKey || e.ctrlKey)){ e.preventDefault(); handleSubmit(); }
   });
 
-  loadSettings();
+  loadSettings().then(()=>{
+    // Show status for whatever was restored, without waiting for a click.
+    if(sanitizeKey(state.keys[state.provider]||'') || state.provider === 'openrouter'){
+      scheduleCheck(null, 400);
+    }
+  });
   autoLoadOpenRouterModels();
 }
 
