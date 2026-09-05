@@ -1360,8 +1360,9 @@ function renderSharedModelOptions(){
   const cur = modelShared.value.trim();
   const shown = applyFilter(all);
   if(!shown.length){
-    modelSelect.innerHTML = '<option value="">검색 결과 없음</option>' +
-      '<option value="'+CUSTOM+'">직접 입력...</option>';
+    modelSelect.innerHTML = '<option value="">' + PROVIDERS[state.provider].label +
+      '에 검색 결과 없음</option><option value="'+CUSTOM+'">직접 입력...</option>';
+    clearAvail(availShared);          // the code belonged to a model not on show
     return;
   }
   modelSelect.innerHTML = optionList(shown, cur) +
@@ -1373,6 +1374,7 @@ function renderSharedModelOptions(){
     modelListResult.textContent = shown.length + ' / ' + total + '개 표시 중';
     modelListResult.style.color = 'var(--text-dim)';
   }
+  syncAvail(null);
 }
 function renderNodeModelOptions(slot){
   const sel = modelField(slot);
@@ -1384,22 +1386,28 @@ function renderNodeModelOptions(slot){
   const q = (modelFilter && modelFilter.value.trim().toLowerCase()) || '';
   const match = list => q ? list.filter(id => id.toLowerCase().indexOf(q) !== -1) : list;
 
-  let ids;
+  let matched;
   if(freeOnlyToggle && freeOnlyToggle.checked){
     const free = all.filter(isFreeModel);
     const hit = match(free);
     // A search with no free match should still reach paid models.
-    ids = hit.length ? hit : match(all);
+    matched = hit.length ? hit : match(all);
   } else {
-    ids = match(all);
+    matched = match(all);
   }
 
+  // The count reflects real matches, not the selection we keep pinned below.
+  const label = (q && !matched.length)
+    ? (PROVIDERS[cfgProvider].label + '에 검색 결과 없음')
+    : ('기본 모델 사용' + (q ? ' (' + matched.length + '/' + all.length + ')' : ''));
+
   // Never drop the current selection just because it is filtered out.
+  let ids = matched;
   if(cur && ids.indexOf(cur) === -1) ids = [cur].concat(ids);
 
-  const count = q ? (' (' + ids.length + '/' + all.length + ')') : '';
-  sel.innerHTML = '<option value="">기본 모델 사용' + count + '</option>' + optionList(ids, cur);
+  sel.innerHTML = '<option value="">' + label + '</option>' + optionList(ids, cur);
   sel.value = (cur && ids.indexOf(cur) !== -1) ? cur : '';
+  syncAvail(slot);
 }
 function renderAllNodeModelOptions(){ SLOTS.forEach(renderNodeModelOptions); }
 
@@ -1997,8 +2005,16 @@ async function probeModel(provider, key, model){
 
 function availEl(slot){ return slot ? $('avail' + slot.charAt(0).toUpperCase() + slot.slice(1)) : availShared; }
 
-function showAvail(el, code, modelName){
+function clearAvail(el){
   if(!el) return;
+  el.textContent = '';
+  el.className = 'avail';
+  el.removeAttribute('data-for');
+}
+
+function showAvail(el, code, modelName, id){
+  if(!el) return;
+  if(id) el.setAttribute('data-for', id); else el.removeAttribute('data-for');
   const info = ERROR_CODES[code] || ERROR_CODES['010'];
   el.className = 'avail ' + info.c;
   if(code === '000'){
@@ -2012,6 +2028,21 @@ function showAvail(el, code, modelName){
 
 // Probe one slot (or the shared model) and show the result inline.
 // Results are cached per provider+model so re-selecting is instant and free.
+// The status line must always describe the currently selected model.
+// Reuse a cached verdict if we have one, otherwise show nothing.
+function syncAvail(slot){
+  const el = availEl(slot);
+  if(!el) return;
+  const cfg = slot ? nodeConfig(slot)
+                   : { provider: state.provider, model: modelShared.value.trim() };
+  if(!cfg.model){ clearAvail(el); return; }
+  const id = cfg.provider + '|' + cfg.model;
+  if(el.getAttribute('data-for') === id) return;
+  const cached = state.probeCache[id];
+  if(cached) showAvail(el, cached.code, cfg.model, id);
+  else clearAvail(el);
+}
+
 async function checkOne(slot){
   syncCurrentKey();
   const cfg = slot ? nodeConfig(slot)
@@ -2023,7 +2054,7 @@ async function checkOne(slot){
 
   const id = cfg.provider + '|' + cfg.model;
   if(state.probeCache[id]){
-    showAvail(el, state.probeCache[id].code, cfg.model);
+    showAvail(el, state.probeCache[id].code, cfg.model, id);
     return;
   }
 
@@ -2034,13 +2065,13 @@ async function checkOne(slot){
   state.probeCache[id] = r;
   // A newer selection may have started while this was in flight.
   if(token !== state.probeSeq && slot === null) return;
-  showAvail(el, r.code, cfg.model);
+  showAvail(el, r.code, cfg.model, id);
 
   // Slots following the shared setting show the same result.
   if(slot === null) SLOTS.forEach(sl=>{
     if(!diffModelToggle.checked) return;
     const c = nodeConfig(sl);
-    if(c.provider + '|' + c.model === id) showAvail(availEl(sl), r.code, c.model);
+    if(c.provider + '|' + c.model === id) showAvail(availEl(sl), r.code, c.model, id);
   });
 }
 
@@ -2082,7 +2113,7 @@ async function checkAllModels(){
       seen[id] = await probeModel(t.provider, sanitizeKey(state.keys[t.provider]||''), t.model);
       state.probeCache[id] = seen[id];
     }
-    showAvail(availEl(t.slot), seen[id].code, t.model);
+    showAvail(availEl(t.slot), seen[id].code, t.model, id);
   }
 
   checkModelsBtn.disabled = false;
