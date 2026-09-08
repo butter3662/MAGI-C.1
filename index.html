@@ -731,7 +731,7 @@
     <div class="save-flash" id="saveFlash">설정 저장됨</div>
   </div>
 
-  <footer class="note">MAGI SYSTEM // TRI-NODE CONSENSUS ENGINE<br><span id="buildTag">BUILD v1.2.0</span></footer>
+  <footer class="note">MAGI SYSTEM // TRI-NODE CONSENSUS ENGINE<br><span id="buildTag">BUILD v1.2.1</span></footer>
 </div>
 
 <script>
@@ -2502,6 +2502,15 @@ function renderErrorCard(key, phase, message){
   el.innerHTML = cardHead(node, 'ERROR', '', key) +
     '<p style="color:#ffb3b3;">연산 실패: ' + escapeHtml(message) + '</p>';
 }
+// User-stopped nodes get a short badge, not the full sentence repeated per card —
+// the one full explanation lives in the status/error banner above.
+function renderCancelledCard(key, phase){
+  const node = NODES[key];
+  const el = cardEl(key, phase);
+  el.classList.remove('err');
+  el.innerHTML = cardHead(node, '중지됨', '', key) +
+    '<p style="color:var(--text-dim);">위 상태 메시지를 참고하세요.</p>';
+}
 function partialNote(data){
   return data && data.partial
     ? '<div class="partial-note">응답이 온전하지 않아 읽을 수 있는 부분만 복원했습니다.</div>'
@@ -2588,13 +2597,16 @@ function setNodeDiamond(key, confidence, isError, isBusy){
   el.classList.add(cls);
   confEl.textContent = confidence + '%';
 }
+function neutralizeDiamond(key){
+  const el = document.querySelector('.node[data-node="' + key + '"]');
+  if(!el) return;
+  el.classList.remove('conf-busy','conf-high','conf-mid','conf-low','conf-error');
+  el.classList.add('conf-pending');
+  const c = el.querySelector('[data-role="conf"]');
+  if(c) c.textContent = '';
+}
 function resetDiamonds(){
-  NODE_ORDER.forEach(k=>{
-    const el = document.querySelector('.node[data-node="' + k + '"]');
-    el.classList.remove('conf-busy','conf-high','conf-mid','conf-low','conf-error');
-    el.classList.add('conf-pending');
-    el.querySelector('[data-role="conf"]').textContent='';
-  });
+  NODE_ORDER.forEach(neutralizeDiamond);
 }
 function renderFinal(fin, p2results){
   const wrap = document.getElementById('r' + state.round + '-verdict');
@@ -2703,9 +2715,15 @@ async function runPhase1(question, atts){
       renderPhase1Card(k, st.value, state.raw[k] ? state.raw[k].p1 : '');
       setNodeDiamond(k, st.value.confidence, false, false);
     } else {
-      results[k]={ error:true, message:(st.reason && st.reason.message) || String(st.reason) };
-      renderErrorCard(k, 'p1', results[k].message);
-      setNodeDiamond(k, null, true, false);
+      const code = st.reason && st.reason.code;
+      results[k] = { error:true, message:(st.reason && st.reason.message) || String(st.reason), code:code };
+      if(code === 'CANCELLED'){
+        renderCancelledCard(k, 'p1');
+        neutralizeDiamond(k);
+      } else {
+        renderErrorCard(k, 'p1', results[k].message);
+        setNodeDiamond(k, null, true, false);
+      }
     }
   });
   return { results, allFailed: ok===0 };
@@ -2737,15 +2755,20 @@ async function runPhase2(question, phase1Results){
   settled.forEach((st,i)=>{
     const k = NODE_ORDER[i];
     if(st.status==='fulfilled'){ results[k]=st.value; ok++; }
-    else results[k]={ error:true, message:(st.reason && st.reason.message) || String(st.reason) };
+    else results[k]={ error:true, message:(st.reason && st.reason.message) || String(st.reason), code:(st.reason && st.reason.code) };
   });
 
   NODE_ORDER.forEach(k=>{
     const r = results[k];
     const prevConf = (phase1Results[k] && !phase1Results[k].error) ? phase1Results[k].confidence : null;
     if(r.error){
-      renderErrorCard(k, 'p2', r.message);
-      setNodeDiamond(k, null, true, false);
+      if(r.code === 'CANCELLED'){
+        renderCancelledCard(k, 'p2');
+        neutralizeDiamond(k);
+      } else {
+        renderErrorCard(k, 'p2', r.message);
+        setNodeDiamond(k, null, true, false);
+      }
     } else {
       renderPhase2Card(k, r, prevConf, state.raw[k] ? state.raw[k].p2 : '', results);
       setNodeDiamond(k, r.confidence, false, false);
