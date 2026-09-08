@@ -605,23 +605,29 @@
       <button class="linkbtn" id="resetBtn" hidden>새 심의 시작</button>
     </div>
     <div class="env-banner" id="envBanner"></div>
-    <textarea id="questionInput" placeholder="MAGI에 제출할 질문이나 딜레마를 입력하세요..."></textarea>
+    <div id="composeArea">
+      <textarea id="questionInput" placeholder="MAGI에 제출할 질문이나 딜레마를 입력하세요..."></textarea>
 
-    <div class="attach-row">
-      <button class="iconbtn" id="attachBtn">파일 첨부</button>
-      <span class="attach-note" id="attachNote">이미지 · 텍스트 · PDF</span>
+      <div class="attach-row">
+        <button class="iconbtn" id="attachBtn">파일 첨부</button>
+        <span class="attach-note" id="attachNote">이미지 · 텍스트 · PDF</span>
+      </div>
+
+      <label class="strict-line">
+        <input type="checkbox" id="strictToggle">
+        <span><b>엄밀 모드</b> — 감성·통념·명시되지 않은 가정을 배제하고 주어진 조건만으로 판단</span>
+      </label>
+      <input type="file" id="fileInput" multiple accept="image/*,.txt,.md,.csv,.json,.pdf,.js,.py,.html,.css,.xml,.yml,.yaml,.log" hidden>
+      <div class="chips" id="fileChips"></div>
     </div>
-
-    <label class="strict-line">
-      <input type="checkbox" id="strictToggle">
-      <span><b>엄밀 모드</b> — 감성·통념·명시되지 않은 가정을 배제하고 주어진 조건만으로 판단</span>
-    </label>
-    <input type="file" id="fileInput" multiple accept="image/*,.txt,.md,.csv,.json,.pdf,.js,.py,.html,.css,.xml,.yml,.yaml,.log" hidden>
-    <div class="chips" id="fileChips"></div>
 
     <button class="submit-btn" id="submitBtn">
       <span id="submitLabel">심의 요청</span>
       <span class="submit-sub">SUBMIT TO MAGI</span>
+    </button>
+    <button class="submit-btn" id="stopBtn" hidden>
+      ⏹ 연산 중지
+      <span class="submit-sub">STOP MAGI</span>
     </button>
     <div class="status-line"><span class="status-dot" id="statusDot"></span><span id="statusText">대기 중 — API 키를 설정하고 질의를 입력하세요</span></div>
     <div class="error-banner" id="errorBanner"></div>
@@ -721,7 +727,7 @@
     <div class="save-flash" id="saveFlash">설정 저장됨</div>
   </div>
 
-  <footer class="note">MAGI SYSTEM // TRI-NODE CONSENSUS ENGINE<br><span id="buildTag">BUILD v1.0.2</span></footer>
+  <footer class="note">MAGI SYSTEM // TRI-NODE CONSENSUS ENGINE<br><span id="buildTag">BUILD v1.1.0</span></footer>
 </div>
 
 <script>
@@ -842,6 +848,8 @@ const fetchModelsBtn = $('fetchModelsBtn');
 const modelListResult = $('modelListResult');
 const questionInput = $('questionInput');
 const submitBtn = $('submitBtn');
+const stopBtn = $('stopBtn');
+const composeArea = $('composeArea');
 const statusDot = $('statusDot');
 const statusText = $('statusText');
 const statusBadge = $('statusBadge');
@@ -1618,11 +1626,23 @@ function budgetFor(model, base){
   return isReasoningModel(model) ? base + 3000 : base;
 }
 
+// Single shared controller: only one pipeline run is ever in flight at a time
+// (the submit button is disabled while busy), so a module-level controller is safe.
+let currentAbortController = null;
+
 async function httpJSON(url, options, providerName){
   let res;
+  const opts = currentAbortController
+    ? Object.assign({}, options, { signal: currentAbortController.signal })
+    : options;
   try{
-    res = await fetch(url, options);
+    res = await fetch(url, opts);
   }catch(e){
+    if(e && e.name === 'AbortError'){
+      const err = new Error('사용자가 심의를 중지했습니다.');
+      err.code = 'CANCELLED';
+      throw err;
+    }
     throw new Error(networkErrorMessage());
   }
   if(!res.ok){
@@ -1858,6 +1878,7 @@ async function callAndParse(provider, apiKey, model, sys, user, temp, maxTok, re
       lastErr = new Error('모델이 JSON 형식으로 답하지 않았습니다.');
     }catch(err){
       lastErr = err;
+      if(err.code === 'CANCELLED') throw err;
       // Auth and credit problems will not fix themselves on a retry.
       if(/유효하지 않|크레딧이 부족|차단/.test(err.message||'')) throw err;
     }
@@ -2426,7 +2447,7 @@ function buildRoundDOM(n, question, fileNames){
       '<div class="final-box">' +
         '<div class="lbl" data-role="anslbl">FINAL_ANSWER ── 통합 판단 AI</div>' +
         '<div class="answer" data-role="answer"></div>' +
-        '<div class="lbl">REASONING</div>' +
+        '<div class="lbl">REASONING ── 판단 근거</div>' +
         '<div class="reasoning" data-role="reasoning"></div>' +
         '<div class="conf-total" data-role="conf"></div>' +
         '<div class="mini-compare" data-role="mini"></div>' +
@@ -2632,7 +2653,22 @@ function setStatus(kind, text){
 }
 function showError(msg){ errorBanner.textContent = msg; errorBanner.classList.add('show'); }
 function clearError(){ errorBanner.classList.remove('show'); errorBanner.textContent=''; }
-function setBusy(b){ state.busy=b; submitBtn.disabled=b; }
+function setBusy(b){
+  state.busy = b;
+  submitBtn.disabled = b;
+  submitBtn.hidden = b;
+  stopBtn.hidden = !b;
+  composeArea.hidden = b;
+  // Editing history mid-run would race with the in-flight pipeline.
+  resetBtn.hidden = b ? true : (state.history.length === 0);
+}
+
+function stopSubmission(){
+  if(!state.busy) return;
+  state.cancelled = true;
+  if(currentAbortController) currentAbortController.abort();
+  setStatus('err', '중지 요청됨 — 진행 중인 호출이 끝나는 대로 멈춥니다...');
+}
 
 /* ---------------------------------------------------------------------
    Pipeline
@@ -2791,6 +2827,8 @@ async function handleSubmit(){
   }
 
   state.raw = {};
+  state.cancelled = false;
+  currentAbortController = new AbortController();
   resetDiamonds();
   setBusy(true);
   state.round++;
@@ -2832,9 +2870,15 @@ async function handleSubmit(){
     updateInputMode();
     setStatus('done', '심의 완료 · ' + pLabel + ' · 이어서 질문할 수 있습니다');
   }catch(err){
-    showError(err && err.message ? err.message : String(err));
-    setStatus('err', '오류로 심의가 중단되었습니다');
+    if(state.cancelled){
+      showError('사용자 요청으로 심의를 중지했습니다. 지금까지 나온 결과는 위에 그대로 남아 있습니다.');
+      setStatus('', '중지됨 — 새 질의를 입력하세요');
+    } else {
+      showError(err && err.message ? err.message : String(err));
+      setStatus('err', '오류로 심의가 중단되었습니다');
+    }
   }finally{
+    currentAbortController = null;
     setBusy(false);
   }
 }
@@ -2942,6 +2986,7 @@ function init(){
     });
   });
   submitBtn.addEventListener('click', handleSubmit);
+  stopBtn.addEventListener('click', stopSubmission);
   attachBtn.addEventListener('click', ()=>fileInput.click());
   fileInput.addEventListener('change', async (e)=>{
     clearError();
