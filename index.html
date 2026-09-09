@@ -70,6 +70,28 @@
 
   .wrap{max-width:640px; margin:0 auto; position:relative; z-index:1;}
 
+  .confirm-banner{
+    position:fixed; left:50%; top:16px; transform:translateX(-50%);
+    width:min(92vw, 420px); z-index:80;
+    background:#04140e; border:2px solid var(--amber); border-radius:4px;
+    padding:14px 16px;
+    box-shadow:0 10px 30px rgba(0,0,0,0.65), 0 0 22px rgba(255,176,32,0.35);
+  }
+  .confirm-banner[hidden]{display:none;}
+  .confirm-text{
+    font-family:var(--font-mono); font-size:13px; color:var(--text-main);
+    line-height:1.5; text-align:center; margin-bottom:12px;
+  }
+  .confirm-actions{display:flex; gap:8px;}
+  .confirm-btn{
+    flex:1; padding:10px; border-radius:2px; cursor:pointer;
+    font-family:var(--font-display); font-weight:700; font-size:12px; letter-spacing:1px;
+  }
+  .confirm-yes{border:1px solid var(--red); background:rgba(255,77,77,0.12); color:var(--red);}
+  .confirm-yes:hover{background:rgba(255,77,77,0.22);}
+  .confirm-no{border:1px solid var(--green-dim); background:transparent; color:var(--text-dim);}
+  .confirm-no:hover{border-color:var(--green-core); color:var(--green-core);}
+
   .js-check{
     border:1px solid var(--red); background:rgba(255,77,77,0.1); color:#ffc9c9;
     padding:12px; border-radius:2px; font-size:12px; line-height:1.7; margin-bottom:14px;
@@ -341,14 +363,6 @@
   .submit-btn:disabled{opacity:0.4; cursor:not-allowed;}
   .submit-btn.amber-btn{border-color:var(--amber); background:rgba(255,176,32,0.1); color:var(--amber);}
   .submit-btn.amber-btn:hover:not(:disabled){background:rgba(255,176,32,0.2); box-shadow:0 0 12px rgba(255,176,32,0.4);}
-  .submit-btn.confirming{
-    animation:confirmPulse 0.9s ease-in-out infinite;
-  }
-  @keyframes confirmPulse{
-    0%,100%{ box-shadow:0 0 6px rgba(255,77,77,0.3); }
-    50%    { box-shadow:0 0 18px 4px rgba(255,77,77,0.75); }
-  }
-  .linkbtn.confirming{color:var(--red); text-decoration-color:var(--red);}
   #submitBtn{border-color:var(--amber); background:rgba(255,176,32,0.1); color:var(--amber);}
   #submitBtn:hover:not(:disabled){background:rgba(255,176,32,0.2); box-shadow:0 0 12px rgba(255,176,32,0.4);}
   .submit-sub{display:block; font-size:9px; letter-spacing:1px; color:var(--text-dim); font-family:var(--font-mono); margin-top:2px; font-weight:400;}
@@ -546,6 +560,13 @@
 </style>
 </head>
 <body>
+<div class="confirm-banner" id="confirmBanner" hidden>
+  <div class="confirm-text" id="confirmText"></div>
+  <div class="confirm-actions">
+    <button class="confirm-btn confirm-yes" id="confirmYesBtn">확인</button>
+    <button class="confirm-btn confirm-no" id="confirmNoBtn">취소</button>
+  </div>
+</div>
 <div class="wrap">
 
   <div class="js-check" id="jsCheck">
@@ -740,7 +761,7 @@
     <div class="save-flash" id="saveFlash">설정 저장됨</div>
   </div>
 
-  <footer class="note">MAGI SYSTEM // TRI-NODE CONSENSUS ENGINE<br><span id="buildTag">BUILD v1.3.1</span></footer>
+  <footer class="note">MAGI SYSTEM // TRI-NODE CONSENSUS ENGINE<br><span id="buildTag">BUILD v1.4.0</span></footer>
 </div>
 
 <script>
@@ -861,6 +882,10 @@ const fetchModelsBtn = $('fetchModelsBtn');
 const modelListResult = $('modelListResult');
 const questionInput = $('questionInput');
 const submitBtn = $('submitBtn');
+const confirmBanner = $('confirmBanner');
+const confirmText = $('confirmText');
+const confirmYesBtn = $('confirmYesBtn');
+const confirmNoBtn = $('confirmNoBtn');
 const stopBtn = $('stopBtn');
 const stopLabel = $('stopLabel');
 const composeArea = $('composeArea');
@@ -2689,52 +2714,28 @@ function setBusy(b){
   // Editing history mid-run would race with the in-flight pipeline;
   // otherwise the reset button is always available while idle.
   resetBtn.hidden = b;
-  // A stale "연산을 중지할까요?" armed state should never carry into the next state.
-  stopConfirm.disarm();
-  resetConfirm.disarm();
+  // Any pending confirm banner refers to a state that's about to change.
+  hideConfirmBanner();
 }
 
 /* ---------------------------------------------------------------------
-   Click-again-to-confirm for actions that discard work
+   Confirm banner — a real on-screen prompt for actions that discard work
 --------------------------------------------------------------------- */
-function armConfirm(opts){
-  let armed = false, timer = null;
-  function disarm(){
-    if(!armed) return;
-    armed = false;
-    clearTimeout(timer);
-    opts.setLabel(false);
-  }
-  function trigger(){
-    if(armed){
-      disarm();
-      opts.onConfirm();
-    } else {
-      armed = true;
-      opts.setLabel(true);
-      timer = setTimeout(disarm, opts.timeoutMs || 3500);
-    }
-  }
-  return { trigger:trigger, disarm:disarm };
+let pendingConfirmAction = null;
+let confirmBannerTimer = null;
+
+function showConfirmBanner(text, onConfirm){
+  confirmText.textContent = text;
+  pendingConfirmAction = onConfirm;
+  confirmBanner.hidden = false;
+  clearTimeout(confirmBannerTimer);
+  confirmBannerTimer = setTimeout(hideConfirmBanner, 6000);
 }
-
-const stopConfirm = armConfirm({
-  setLabel(c){
-    stopLabel.textContent = c ? '연산을 중지할까요?' : '연산 중지';
-    stopBtn.classList.toggle('confirming', c);
-  },
-  timeoutMs: 3500,
-  onConfirm: stopSubmission
-});
-
-const resetConfirm = armConfirm({
-  setLabel(c){
-    resetBtn.textContent = c ? '새 심의를 시작할까요?' : '새 심의 시작';
-    resetBtn.classList.toggle('confirming', c);
-  },
-  timeoutMs: 3500,
-  onConfirm(){ if(!state.busy) resetSession(); }
-});
+function hideConfirmBanner(){
+  confirmBanner.hidden = true;
+  pendingConfirmAction = null;
+  clearTimeout(confirmBannerTimer);
+}
 
 function stopSubmission(){
   if(!state.busy) return;
@@ -3069,14 +3070,24 @@ function init(){
     });
   });
   submitBtn.addEventListener('click', handleSubmit);
-  stopBtn.addEventListener('click', stopConfirm.trigger);
+  stopBtn.addEventListener('click', ()=>{
+    showConfirmBanner('연산을 중지할까요?', stopSubmission);
+  });
   attachBtn.addEventListener('click', ()=>fileInput.click());
   fileInput.addEventListener('change', async (e)=>{
     clearError();
     await addFiles(e.target.files);
     fileInput.value = '';   // allow re-picking the same file
   });
-  resetBtn.addEventListener('click', resetConfirm.trigger);
+  resetBtn.addEventListener('click', ()=>{
+    showConfirmBanner('새 심의를 시작할까요?', ()=>{ if(!state.busy) resetSession(); });
+  });
+  confirmYesBtn.addEventListener('click', ()=>{
+    const action = pendingConfirmAction;
+    hideConfirmBanner();
+    if(action) action();
+  });
+  confirmNoBtn.addEventListener('click', hideConfirmBanner);
   updateInputMode();
   questionInput.addEventListener('keydown', (e)=>{
     if(e.key==='Enter' && (e.metaKey || e.ctrlKey)){ e.preventDefault(); handleSubmit(); }
