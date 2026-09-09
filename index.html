@@ -71,16 +71,17 @@
   .wrap{max-width:640px; margin:0 auto; position:relative; z-index:1;}
 
   .confirm-banner{
-    position:fixed; left:50%; top:16px; transform:translateX(-50%);
-    width:min(92vw, 420px); z-index:80;
+    position:fixed; left:50%; top:50%; transform:translate(-50%,-50%);
+    width:min(92vw, 420px); aspect-ratio:4/3; z-index:80;
     background:#04140e; border:2px solid var(--amber); border-radius:4px;
-    padding:14px 16px;
+    padding:18px;
     box-shadow:0 10px 30px rgba(0,0,0,0.65), 0 0 22px rgba(255,176,32,0.35);
+    display:flex; flex-direction:column; justify-content:center; gap:16px;
   }
   .confirm-banner[hidden]{display:none;}
   .confirm-text{
-    font-family:var(--font-mono); font-size:13px; color:var(--text-main);
-    line-height:1.5; text-align:center; margin-bottom:12px;
+    font-family:var(--font-mono); font-size:14px; color:var(--text-main);
+    line-height:1.6; text-align:center;
   }
   .confirm-actions{display:flex; gap:8px;}
   .confirm-btn{
@@ -761,7 +762,7 @@
     <div class="save-flash" id="saveFlash">설정 저장됨</div>
   </div>
 
-  <footer class="note">MAGI SYSTEM // TRI-NODE CONSENSUS ENGINE<br><span id="buildTag">BUILD v1.4.0</span></footer>
+  <footer class="note">MAGI SYSTEM // TRI-NODE CONSENSUS ENGINE<br><span id="buildTag">BUILD v1.4.1</span></footer>
 </div>
 
 <script>
@@ -2722,19 +2723,15 @@ function setBusy(b){
    Confirm banner — a real on-screen prompt for actions that discard work
 --------------------------------------------------------------------- */
 let pendingConfirmAction = null;
-let confirmBannerTimer = null;
 
 function showConfirmBanner(text, onConfirm){
   confirmText.textContent = text;
   pendingConfirmAction = onConfirm;
   confirmBanner.hidden = false;
-  clearTimeout(confirmBannerTimer);
-  confirmBannerTimer = setTimeout(hideConfirmBanner, 6000);
 }
 function hideConfirmBanner(){
   confirmBanner.hidden = true;
   pendingConfirmAction = null;
-  clearTimeout(confirmBannerTimer);
 }
 
 function stopSubmission(){
