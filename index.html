@@ -74,13 +74,18 @@
     position:fixed; left:50%; top:50%; transform:translate(-50%,-50%);
     width:min(92vw, 420px); aspect-ratio:4/3; z-index:80;
     background:#04140e; border:2px solid var(--amber); border-radius:4px;
-    padding:18px;
+    padding:20px 18px;
     box-shadow:0 10px 30px rgba(0,0,0,0.65), 0 0 22px rgba(255,176,32,0.35);
-    display:flex; flex-direction:column; justify-content:center; gap:16px;
+    display:flex; flex-direction:column; justify-content:space-between;
   }
   .confirm-banner[hidden]{display:none;}
+  .confirm-body{display:flex; flex-direction:column; gap:10px;}
   .confirm-text{
-    font-family:var(--font-mono); font-size:14px; color:var(--text-main);
+    font-family:var(--font-mono); font-size:19px; font-weight:700; color:var(--text-main);
+    line-height:1.5; text-align:center;
+  }
+  .confirm-warn{
+    font-family:var(--font-mono); font-size:12px; color:var(--red);
     line-height:1.6; text-align:center;
   }
   .confirm-actions{display:flex; gap:8px;}
@@ -562,7 +567,10 @@
 </head>
 <body>
 <div class="confirm-banner" id="confirmBanner" hidden>
-  <div class="confirm-text" id="confirmText"></div>
+  <div class="confirm-body">
+    <div class="confirm-text" id="confirmText"></div>
+    <div class="confirm-warn" id="confirmWarn"></div>
+  </div>
   <div class="confirm-actions">
     <button class="confirm-btn confirm-yes" id="confirmYesBtn">확인</button>
     <button class="confirm-btn confirm-no" id="confirmNoBtn">취소</button>
@@ -762,7 +770,7 @@
     <div class="save-flash" id="saveFlash">설정 저장됨</div>
   </div>
 
-  <footer class="note">MAGI SYSTEM // TRI-NODE CONSENSUS ENGINE<br><span id="buildTag">BUILD v1.4.1</span></footer>
+  <footer class="note">MAGI SYSTEM // TRI-NODE CONSENSUS ENGINE<br><span id="buildTag">BUILD v1.4.2</span></footer>
 </div>
 
 <script>
@@ -885,6 +893,7 @@ const questionInput = $('questionInput');
 const submitBtn = $('submitBtn');
 const confirmBanner = $('confirmBanner');
 const confirmText = $('confirmText');
+const confirmWarn = $('confirmWarn');
 const confirmYesBtn = $('confirmYesBtn');
 const confirmNoBtn = $('confirmNoBtn');
 const stopBtn = $('stopBtn');
@@ -2724,8 +2733,9 @@ function setBusy(b){
 --------------------------------------------------------------------- */
 let pendingConfirmAction = null;
 
-function showConfirmBanner(text, onConfirm){
+function showConfirmBanner(text, warnText, onConfirm){
   confirmText.textContent = text;
+  confirmWarn.textContent = warnText || '';
   pendingConfirmAction = onConfirm;
   confirmBanner.hidden = false;
 }
@@ -3068,7 +3078,7 @@ function init(){
   });
   submitBtn.addEventListener('click', handleSubmit);
   stopBtn.addEventListener('click', ()=>{
-    showConfirmBanner('연산을 중지할까요?', stopSubmission);
+    showConfirmBanner('연산을 중지할까요?', '※ 현재 연산중인 데이터가 사라집니다', stopSubmission);
   });
   attachBtn.addEventListener('click', ()=>fileInput.click());
   fileInput.addEventListener('change', async (e)=>{
@@ -3077,7 +3087,7 @@ function init(){
     fileInput.value = '';   // allow re-picking the same file
   });
   resetBtn.addEventListener('click', ()=>{
-    showConfirmBanner('새 심의를 시작할까요?', ()=>{ if(!state.busy) resetSession(); });
+    showConfirmBanner('새 심의를 시작할까요?', '※ 현재 대화 내용이 초기화됩니다', ()=>{ if(!state.busy) resetSession(); });
   });
   confirmYesBtn.addEventListener('click', ()=>{
     const action = pendingConfirmAction;
