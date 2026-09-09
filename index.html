@@ -76,12 +76,14 @@
     background:#04140e; border:2px solid var(--amber); border-radius:4px;
     padding:16px 14px;
     box-shadow:0 10px 30px rgba(0,0,0,0.65), 0 0 22px rgba(255,176,32,0.35);
-    display:flex; flex-direction:column; justify-content:space-between;
+    display:flex; flex-direction:column;
   }
   .confirm-banner[hidden]{display:none;}
-  .confirm-body{display:flex; flex-direction:column; gap:8px;}
+  .confirm-body{
+    flex:1; display:flex; flex-direction:column; justify-content:center; align-items:center; gap:10px;
+  }
   .confirm-text{
-    font-family:var(--font-mono); font-size:16px; font-weight:700; color:var(--text-main);
+    font-family:var(--font-mono); font-size:22px; font-weight:700; color:var(--text-main);
     line-height:1.4; text-align:center;
   }
   .confirm-warn{
@@ -770,7 +772,7 @@
     <div class="save-flash" id="saveFlash">설정 저장됨</div>
   </div>
 
-  <footer class="note">MAGI SYSTEM // TRI-NODE CONSENSUS ENGINE<br><span id="buildTag">BUILD v1.4.3</span></footer>
+  <footer class="note">MAGI SYSTEM // TRI-NODE CONSENSUS ENGINE<br><span id="buildTag">BUILD v1.4.4</span></footer>
 </div>
 
 <script>
