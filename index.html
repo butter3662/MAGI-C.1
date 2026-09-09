@@ -72,21 +72,21 @@
 
   .confirm-banner{
     position:fixed; left:50%; top:50%; transform:translate(-50%,-50%);
-    width:min(92vw, 420px); aspect-ratio:4/3; z-index:80;
+    width:min(78vw, 300px); aspect-ratio:4/3; z-index:80;
     background:#04140e; border:2px solid var(--amber); border-radius:4px;
-    padding:20px 18px;
+    padding:16px 14px;
     box-shadow:0 10px 30px rgba(0,0,0,0.65), 0 0 22px rgba(255,176,32,0.35);
     display:flex; flex-direction:column; justify-content:space-between;
   }
   .confirm-banner[hidden]{display:none;}
-  .confirm-body{display:flex; flex-direction:column; gap:10px;}
+  .confirm-body{display:flex; flex-direction:column; gap:8px;}
   .confirm-text{
-    font-family:var(--font-mono); font-size:19px; font-weight:700; color:var(--text-main);
-    line-height:1.5; text-align:center;
+    font-family:var(--font-mono); font-size:16px; font-weight:700; color:var(--text-main);
+    line-height:1.4; text-align:center;
   }
   .confirm-warn{
-    font-family:var(--font-mono); font-size:12px; color:var(--red);
-    line-height:1.6; text-align:center;
+    font-family:var(--font-mono); font-size:11px; color:var(--red);
+    line-height:1.5; text-align:center;
   }
   .confirm-actions{display:flex; gap:8px;}
   .confirm-btn{
@@ -770,7 +770,7 @@
     <div class="save-flash" id="saveFlash">설정 저장됨</div>
   </div>
 
-  <footer class="note">MAGI SYSTEM // TRI-NODE CONSENSUS ENGINE<br><span id="buildTag">BUILD v1.4.2</span></footer>
+  <footer class="note">MAGI SYSTEM // TRI-NODE CONSENSUS ENGINE<br><span id="buildTag">BUILD v1.4.3</span></footer>
 </div>
 
 <script>
