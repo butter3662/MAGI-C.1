@@ -371,6 +371,11 @@
   .submit-btn:disabled{opacity:0.4; cursor:not-allowed;}
   .submit-btn.amber-btn{border-color:var(--amber); background:rgba(255,176,32,0.1); color:var(--amber);}
   .submit-btn.amber-btn:hover:not(:disabled){background:rgba(255,176,32,0.2); box-shadow:0 0 12px rgba(255,176,32,0.4);}
+  .submit-gate-note{
+    font-size:11px; color:var(--red); background:rgba(255,77,77,0.08);
+    border:1px solid var(--red-dim); border-radius:2px; padding:6px 8px;
+    margin-top:8px; line-height:1.5;
+  }
   #submitBtn{border-color:var(--amber); background:rgba(255,176,32,0.1); color:var(--amber);}
   #submitBtn:hover:not(:disabled){background:rgba(255,176,32,0.2); box-shadow:0 0 12px rgba(255,176,32,0.4);}
   .submit-sub{display:block; font-size:9px; letter-spacing:1px; color:var(--text-dim); font-family:var(--font-mono); margin-top:2px; font-weight:400;}
@@ -667,6 +672,7 @@
       <div class="chips" id="fileChips"></div>
     </div>
 
+    <div class="submit-gate-note" id="submitGateNote" hidden></div>
     <button class="submit-btn amber-btn" id="submitBtn">
       <span id="submitLabel">심의 요청</span>
       <span class="submit-sub">SUBMIT TO MAGI</span>
@@ -773,7 +779,7 @@
     <div class="save-flash" id="saveFlash">설정 저장됨</div>
   </div>
 
-  <footer class="note">MAGI SYSTEM // TRI-NODE CONSENSUS ENGINE<br><span id="buildTag">BUILD v1.6.2</span></footer>
+  <footer class="note">MAGI SYSTEM // TRI-NODE CONSENSUS ENGINE<br><span id="buildTag">BUILD v1.7.1</span></footer>
 </div>
 
 <script>
@@ -899,6 +905,7 @@ const fetchModelsBtn = $('fetchModelsBtn');
 const modelListResult = $('modelListResult');
 const questionInput = $('questionInput');
 const submitBtn = $('submitBtn');
+const submitGateNote = $('submitGateNote');
 const confirmBanner = $('confirmBanner');
 const confirmText = $('confirmText');
 const confirmWarn = $('confirmWarn');
@@ -2265,11 +2272,42 @@ async function probeModel(provider, key, model, atts){
 
 function availEl(slot){ return slot ? $('avail' + slot.charAt(0).toUpperCase() + slot.slice(1)) : availShared; }
 
+// Blocks submission up front when a currently selected model is already
+// known bad, instead of letting the click through and bouncing back. But a
+// verdict (good or bad) older than the TTL is not trusted either way — it
+// gets a silent background re-check instead of permanently gating the button.
+function refreshSubmitGate(){
+  if(state.busy) return;   // setBusy already owns disabled/hidden while running
+  let bad = null;
+  const staleSlots = [];
+  for(const slot of SLOTS){
+    const cfg = nodeConfig(slot);
+    const id = cfg.provider + '|' + cfg.model;
+    const c = state.probeCache[id];
+    if(!c) continue;                      // never checked - nothing to gate on yet
+    if(!isCacheFresh(id)){ staleSlots.push(slot); continue; }
+    if(c.code !== '000'){ bad = { slot:slot, code:c.code }; break; }
+  }
+  submitBtn.disabled = !!bad;
+  if(bad){
+    const info = ERROR_CODES[bad.code] || ERROR_CODES['010'];
+    submitGateNote.textContent = '⚠ ' + SLOT_LABEL[bad.slot] + '의 모델을 지금 사용할 수 없습니다 (' + info.t + ' [' + bad.code + ']). 설정에서 모델을 바꾸세요.';
+    submitGateNote.hidden = false;
+  } else {
+    submitGateNote.hidden = true;
+  }
+  // Refresh whatever's gone stale so the gate is never stuck on old news —
+  // free-tier models recover just as unpredictably as they break.
+  const uniqueSlots = [...new Set(staleSlots.map(sl => diffModelToggle.checked ? sl : null))];
+  uniqueSlots.forEach(sl => checkOne(sl));
+}
+
 function clearAvail(el){
   if(!el) return;
   el.textContent = '';
   el.className = 'avail';
   el.removeAttribute('data-for');
+  refreshSubmitGate();
 }
 
 function showAvail(el, code, modelName, id){
@@ -2284,6 +2322,7 @@ function showAvail(el, code, modelName, id){
     el.innerHTML = '✗ 현재 이용할 수 없는 모델입니다 (' + info.t + ')' +
                    '<span class="ec">' + code + '</span>';
   }
+  refreshSubmitGate();
 }
 
 // Probe one slot (or the shared model) and show the result inline.
@@ -2313,7 +2352,7 @@ async function checkOne(slot){
   if(!cfg.model){ el.textContent=''; el.className='avail'; return; }
 
   const id = cfg.provider + '|' + cfg.model;
-  if(state.probeCache[id]){
+  if(isCacheFresh(id)){
     showAvail(el, state.probeCache[id].code, cfg.model, id);
     return;
   }
@@ -2744,6 +2783,7 @@ function setBusy(b){
   resetBtn.hidden = b;
   // Any pending confirm banner refers to a state that's about to change.
   hideConfirmBanner();
+  if(!b) refreshSubmitGate();
 }
 
 /* ---------------------------------------------------------------------
@@ -2904,9 +2944,13 @@ function resetSession(){
   setStatus('', '대기 중 — 새 심의를 시작합니다');
 }
 
-function isReasonablyFresh(id){
+const PROBE_TTL_MS = 90000;
+// Freshness cuts both ways: a "broken" verdict from two minutes ago is not
+// proof it's still broken now, any more than a "working" one proves it
+// still works. Only a genuinely recent check counts as fresh.
+function isCacheFresh(id){
   const c = state.probeCache[id];
-  return c && c.code === '000' && (Date.now() - (c.ts || 0)) < 90000;
+  return !!(c && (Date.now() - (c.ts || 0)) < PROBE_TTL_MS);
 }
 
 // A real, live check right before the run — a badge checked minutes ago
@@ -2924,7 +2968,7 @@ async function preflightCheck(){
     const slotAtts = slot === 'supreme' ? [] : atts;
     const id = cfg.provider + '|' + cfg.model + (slotAtts.length ? '|att' : '');
     if(seen[id] === undefined){
-      seen[id] = isReasonablyFresh(id)
+      seen[id] = isCacheFresh(id)
         ? state.probeCache[id]
         : await probeModel(cfg.provider, sanitizeKey(state.keys[cfg.provider]||''), cfg.model, slotAtts);
       seen[id].ts = seen[id].ts || Date.now();
