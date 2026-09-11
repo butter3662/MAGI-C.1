@@ -387,6 +387,7 @@
   .error-banner{
     display:none; border:1px solid var(--red); background:rgba(255,77,77,0.08); color:#ffb3b3;
     padding:10px; border-radius:2px; font-size:12px; margin-top:10px; line-height:1.5;
+    white-space:pre-wrap;
   }
   .error-banner.show{display:block;}
 
@@ -772,7 +773,7 @@
     <div class="save-flash" id="saveFlash">설정 저장됨</div>
   </div>
 
-  <footer class="note">MAGI SYSTEM // TRI-NODE CONSENSUS ENGINE<br><span id="buildTag">BUILD v1.5.1</span></footer>
+  <footer class="note">MAGI SYSTEM // TRI-NODE CONSENSUS ENGINE<br><span id="buildTag">BUILD v1.6.0</span></footer>
 </div>
 
 <script>
@@ -1601,14 +1602,16 @@ function renderSharedModelOptions(){
   }
   modelSelect.innerHTML = optionList(shown, cur) +
     '<option value="'+CUSTOM+'">직접 입력...</option>';
-  modelSelect.value = (shown.indexOf(cur) !== -1) ? cur : shown[0];
+  const switched = cur && shown.indexOf(cur) === -1;
+  modelSelect.value = switched ? shown[0] : cur;
   if(modelSelect.value && modelSelect.value !== CUSTOM) modelShared.value = modelSelect.value;
   const total = all.length;
   if(modelListResult && (modelFilter.value.trim() || freeOnlyToggle.checked)){
     modelListResult.textContent = shown.length + ' / ' + total + '개 표시 중';
     modelListResult.style.color = 'var(--text-dim)';
   }
-  syncAvail(null);
+  if(switched) scheduleCheck(null, 0);   // the model actually changed, not just its list position
+  else syncAvail(null);
 }
 function renderNodeModelOptions(slot){
   const sel = modelField(slot);
@@ -2318,6 +2321,7 @@ async function checkOne(slot){
   el.className = 'avail checking';
   el.textContent = '확인 중...';
   const r = await probeModel(cfg.provider, sanitizeKey(state.keys[cfg.provider]||''), cfg.model);
+  r.ts = Date.now();
   state.probeCache[id] = r;
   // A newer selection may have started while this was in flight.
   if(token !== state.probeSeq && slot === null) return;
@@ -2367,6 +2371,7 @@ async function checkAllModels(){
     const id = t.provider + '|' + t.model;
     if(seen[id] === undefined){
       seen[id] = await probeModel(t.provider, sanitizeKey(state.keys[t.provider]||''), t.model);
+      seen[id].ts = Date.now();
       state.probeCache[id] = seen[id];
     }
     showAvail(availEl(t.slot), seen[id].code, t.model, id);
@@ -2898,6 +2903,37 @@ function resetSession(){
   setStatus('', '대기 중 — 새 심의를 시작합니다');
 }
 
+function isReasonablyFresh(id){
+  const c = state.probeCache[id];
+  return c && c.code === '000' && (Date.now() - (c.ts || 0)) < 90000;
+}
+
+// A real, live check right before the run — a badge checked minutes ago
+// (especially for volatile free-tier models) is not proof it still works now.
+async function preflightCheck(){
+  syncCurrentKey();
+  const seen = {};
+  const failures = [];
+  for(const slot of SLOTS){
+    const cfg = nodeConfig(slot);
+    const id = cfg.provider + '|' + cfg.model;
+    if(seen[id] === undefined){
+      seen[id] = isReasonablyFresh(id)
+        ? state.probeCache[id]
+        : await probeModel(cfg.provider, sanitizeKey(state.keys[cfg.provider]||''), cfg.model);
+      seen[id].ts = seen[id].ts || Date.now();
+      state.probeCache[id] = seen[id];
+    }
+    const r = seen[id];
+    showAvail(diffModelToggle.checked ? availEl(slot) : availShared, r.code, cfg.model, id);
+    if(r.code !== '000'){
+      const info = ERROR_CODES[r.code] || ERROR_CODES['010'];
+      failures.push(SLOT_LABEL[slot] + ' — ' + PROVIDERS[cfg.provider].label + ' ' + cfg.model + ' (' + info.t + ' [' + r.code + '])');
+    }
+  }
+  return failures;
+}
+
 async function handleSubmit(){
   if(state.busy) return;
   const question = questionInput.value.trim();
@@ -2926,6 +2962,14 @@ async function handleSubmit(){
   if(pdfBad.length){
     showError('PDF는 Claude 또는 Gemini에서만 읽을 수 있습니다. 다음 노드의 AI를 바꾸거나 PDF를 제거하세요: '
               + pdfBad.join(', '));
+    return;
+  }
+
+  setStatus('busy', '모델 사용 가능 여부 확인 중...');
+  const preflightFailures = await preflightCheck();
+  if(preflightFailures.length){
+    showError('다음 모델을 지금 사용할 수 없습니다 — 설정에서 모델을 바꿔주세요:\n' + preflightFailures.join('\n'));
+    setStatus('err', '모델 확인 실패로 심의를 시작하지 않았습니다');
     return;
   }
 
