@@ -773,7 +773,7 @@
     <div class="save-flash" id="saveFlash">설정 저장됨</div>
   </div>
 
-  <footer class="note">MAGI SYSTEM // TRI-NODE CONSENSUS ENGINE<br><span id="buildTag">BUILD v1.6.0</span></footer>
+  <footer class="note">MAGI SYSTEM // TRI-NODE CONSENSUS ENGINE<br><span id="buildTag">BUILD v1.6.2</span></footer>
 </div>
 
 <script>
@@ -2209,8 +2209,9 @@ function classifyStatus(status, msg){
 }
 
 // Smallest possible real request, so the check reflects actual usability.
-async function probeModel(provider, key, model){
+async function probeModel(provider, key, model, atts){
   if(!key && provider !== 'openrouter') return { code:'009' };
+  const PING = '"ok"만 출력하십시오.';
   try{
     let url, opts;
     if(provider === 'claude'){
@@ -2219,13 +2220,13 @@ async function probeModel(provider, key, model){
         'Content-Type':'application/json', 'x-api-key':key,
         'anthropic-version':'2023-06-01',
         'anthropic-dangerous-direct-browser-access':'true'
-      }, body: JSON.stringify({ model:model, max_tokens:60, messages:[{role:'user',content:'"ok"만 출력하십시오.'}] }) };
+      }, body: JSON.stringify({ model:model, max_tokens:60, messages:[{role:'user',content:anthropicContent(PING, atts)}] }) };
     } else if(provider === 'gemini'){
       url = 'https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(model) + ':generateContent';
       // Gemini 2.5/3 models reserve tokens for hidden "thinking" by default,
       // which can silently consume a small budget before any visible text.
       opts = { method:'POST', headers:{ 'Content-Type':'application/json', 'x-goog-api-key':key },
-        body: JSON.stringify({ contents:[{role:'user',parts:[{text:'"ok"만 출력하십시오.'}]}],
+        body: JSON.stringify({ contents:[{role:'user',parts:geminiParts(PING, atts)}],
                                generationConfig:{ maxOutputTokens:2000 } }) };
     } else {
       url = (provider === 'gpt')
@@ -2233,7 +2234,7 @@ async function probeModel(provider, key, model){
         : 'https://openrouter.ai/api/v1/chat/completions';
       // Ask for a real (tiny) JSON body so reasoning models that burn their
       // whole budget on thinking are caught here instead of mid-deliberation.
-      const body = { model:model, messages:[{role:'user',content:'{"ok":1} 만 출력하십시오.'}] };
+      const body = { model:model, messages:[{role:'user',content:openAIContent('{"ok":1} 만 출력하십시오.', atts)}] };
       if(provider === 'gpt' && isOpenAIReasoningModel(model)) body.max_completion_tokens = 400;
       else body.max_tokens = 400;
       opts = { method:'POST', headers:{ 'Content-Type':'application/json',
@@ -2912,15 +2913,20 @@ function isReasonablyFresh(id){
 // (especially for volatile free-tier models) is not proof it still works now.
 async function preflightCheck(){
   syncCurrentKey();
+  const atts = binaryFiles();
   const seen = {};
   const failures = [];
   for(const slot of SLOTS){
     const cfg = nodeConfig(slot);
-    const id = cfg.provider + '|' + cfg.model;
+    // Only phase-1 nodes ever receive attachments (phase 2 and the final
+    // call reason over text only), so testing 'supreme' with an image would
+    // block on a failure it could never actually hit.
+    const slotAtts = slot === 'supreme' ? [] : atts;
+    const id = cfg.provider + '|' + cfg.model + (slotAtts.length ? '|att' : '');
     if(seen[id] === undefined){
       seen[id] = isReasonablyFresh(id)
         ? state.probeCache[id]
-        : await probeModel(cfg.provider, sanitizeKey(state.keys[cfg.provider]||''), cfg.model);
+        : await probeModel(cfg.provider, sanitizeKey(state.keys[cfg.provider]||''), cfg.model, slotAtts);
       seen[id].ts = seen[id].ts || Date.now();
       state.probeCache[id] = seen[id];
     }
@@ -2928,7 +2934,8 @@ async function preflightCheck(){
     showAvail(diffModelToggle.checked ? availEl(slot) : availShared, r.code, cfg.model, id);
     if(r.code !== '000'){
       const info = ERROR_CODES[r.code] || ERROR_CODES['010'];
-      failures.push(SLOT_LABEL[slot] + ' — ' + PROVIDERS[cfg.provider].label + ' ' + cfg.model + ' (' + info.t + ' [' + r.code + '])');
+      const suffix = slotAtts.length ? ' — 첨부 파일과 함께 실패' : '';
+      failures.push(SLOT_LABEL[slot] + ' — ' + PROVIDERS[cfg.provider].label + ' ' + cfg.model + ' (' + info.t + ' [' + r.code + ']' + suffix + ')');
     }
   }
   return failures;
@@ -2938,7 +2945,10 @@ async function handleSubmit(){
   if(state.busy) return;
   const question = questionInput.value.trim();
   clearError();
-  if(!question){ showError('질의 내용을 입력하세요.'); return; }
+  if(!question && !usableFiles().length){
+    showError('질의 내용을 입력하거나 파일을 첨부하세요.');
+    return;
+  }
 
   syncCurrentKey();
 
@@ -2983,10 +2993,12 @@ async function handleSubmit(){
 
   const atts = binaryFiles();
   const fileNames = usableFiles().map(f=>f.name);
-  buildRoundDOM(state.round, question, fileNames);
+  // A file-only submission still needs some instruction text for the model.
+  const effectiveQuestion = question || '첨부된 파일을 분석하고 이에 대해 판단하십시오.';
+  buildRoundDOM(state.round, effectiveQuestion, fileNames);
 
   // Text files and prior rounds are folded into the prompt itself.
-  const fullQuestion = buildHistoryContext() + question + filesAsText();
+  const fullQuestion = buildHistoryContext() + effectiveQuestion + filesAsText();
   const used = [];
   SLOTS.forEach(slot=>{
     const l = PROVIDERS[nodeConfig(slot).provider].label;
@@ -3008,7 +3020,7 @@ async function handleSubmit(){
     renderFinal(fin, p2.results);
 
     state.history.push({
-      question: question,
+      question: effectiveQuestion,
       answer: fin.final_answer,
       verdict: fin.verdict,
       confidence: fin.confidence
