@@ -779,7 +779,7 @@
     <div class="save-flash" id="saveFlash">설정 저장됨</div>
   </div>
 
-  <footer class="note">MAGI SYSTEM // TRI-NODE CONSENSUS ENGINE<br><span id="buildTag">BUILD v1.7.1</span></footer>
+  <footer class="note">MAGI SYSTEM // TRI-NODE CONSENSUS ENGINE<br><span id="buildTag">BUILD v1.7.2</span></footer>
 </div>
 
 <script>
@@ -1943,6 +1943,14 @@ async function callAndParse(provider, apiKey, model, sys, user, temp, maxTok, re
     const budget = attempt===0 ? maxTok : maxTok * 2;
     try{
       const raw = await callModel(provider, apiKey, model, sys, u, temp, budget, atts);
+      // A real successful call is the strongest possible evidence this
+      // provider+model works right now — stronger than a synthetic probe.
+      // Stamping it here means an immediate follow-up question doesn't
+      // wait through a redundant re-check within the TTL window.
+      const baseId = provider + '|' + model;
+      const stampedId = (atts && atts.length) ? baseId + '|att' : baseId;
+      state.probeCache[stampedId] = { code:'000', ts: Date.now() };
+      if(stampedId !== baseId) state.probeCache[baseId] = { code:'000', ts: Date.now() };
       lastRaw = raw;
       const parsed = safeParseJSON(raw, requiredKeys);
       if(parsed) return { parsed: parsed, raw: raw };
