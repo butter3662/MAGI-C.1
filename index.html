@@ -457,6 +457,38 @@
   .inf-row .fl{height:100%; background:var(--green-core); transition:width .6s ease;}
   .inf-row .vl{width:38px; text-align:right; flex-shrink:0; color:var(--green-core); font-weight:700;}
 
+  .acct-btn{padding:9px 8px;}
+  .acct-user-row{display:flex; justify-content:space-between; align-items:center; font-size:11px; color:var(--text-dim); margin-bottom:6px;}
+  .acct-user-row b{color:var(--green-core); font-weight:400;}
+  .sess-list{display:flex; flex-direction:column; gap:5px; max-height:260px; overflow-y:auto;}
+  .sess-item{display:flex; gap:5px;}
+  .sess-item.on .sess-open{border-color:var(--green-core);}
+  .sess-open{flex:1; min-width:0; display:flex; justify-content:space-between; gap:8px; text-align:left;
+    background:#020a06; border:1px solid var(--green-dim); color:var(--text-main);
+    font-family:var(--font-mono); font-size:11.5px; padding:8px; border-radius:2px; cursor:pointer;}
+  .sess-title{overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .sess-when{flex-shrink:0; color:var(--text-dim); font-size:10px;}
+  .sess-del{background:transparent; border:1px solid var(--red-dim); color:var(--red); font-size:10px; padding:0 8px; border-radius:2px; cursor:pointer;}
+  .sb-config{margin-top:10px; font-size:11px; color:var(--text-dim);}
+  .sb-config summary{cursor:pointer;}
+
+  .auth-gate{position:fixed; inset:0; z-index:90; overflow-y:auto; padding:20px;
+    background:radial-gradient(ellipse at 50% 30%, rgba(61,255,198,0.08), transparent 60%), #030704;
+    display:flex; align-items:center; justify-content:center;}
+  .auth-gate[hidden], #authForm[hidden], #authSetup[hidden], .auth-card input[hidden]{display:none;}
+  .auth-card{width:min(92vw,360px); display:flex; flex-direction:column; gap:10px;}
+  #authForm, #authSetup{display:flex; flex-direction:column; gap:10px;}
+  .auth-logo{font-family:var(--font-display); font-weight:900; font-size:40px; letter-spacing:8px;
+    text-align:center; color:var(--green-core); text-shadow:0 0 14px rgba(61,255,198,.7);}
+  .auth-sub{text-align:center; font-size:12px; letter-spacing:3px; color:var(--amber); margin-bottom:8px;}
+  .auth-main{padding:12px; border:1px solid var(--amber); background:rgba(255,176,32,.1); color:var(--amber);
+    font-family:var(--font-display); font-weight:700; letter-spacing:3px; font-size:13px; border-radius:2px; cursor:pointer;}
+  .auth-main:disabled{opacity:.5;}
+  .auth-msg{font-size:11.5px; min-height:16px; text-align:center; line-height:1.5;}
+  .auth-switch{text-align:center; font-size:11.5px; color:var(--text-dim);}
+  .auth-note{font-size:11px; color:var(--text-dim); line-height:1.5; text-align:center;}
+  .auth-foot{display:flex; justify-content:space-between; margin-top:12px;}
+
   /* ---------- results ---------- */
   .phase-block{margin-top:22px; display:none;}
   .phase-block.show{display:block;}
@@ -572,8 +604,36 @@
   footer.note{margin-top:26px; text-align:center; font-size:9.5px; color:var(--green-dim); letter-spacing:0.5px;}
   #buildTag{color:var(--amber); letter-spacing:1px;}
 </style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
+<div class="auth-gate" id="authGate" hidden>
+  <div class="auth-card">
+    <div class="auth-logo">MAGI</div>
+    <div class="auth-sub" id="authSub">로그인</div>
+    <div id="authSetup" hidden>
+      <div class="auth-note">처음 한 번만 동기화 서버(Supabase) 정보를 입력하세요.</div>
+      <input type="text" id="gateSbUrl" placeholder="Project URL (https://xxxx.supabase.co)">
+      <input type="password" id="gateSbKey" placeholder="anon public key">
+      <button class="auth-main" id="gateSbSave">서버 연결</button>
+    </div>
+    <div id="authForm">
+      <input type="text" id="gateEmail" placeholder="이메일" autocomplete="username">
+      <input type="password" id="gatePw" placeholder="비밀번호 (6자 이상)" autocomplete="current-password">
+      <input type="password" id="gatePw2" placeholder="비밀번호 확인" autocomplete="new-password" hidden>
+      <button class="auth-main" id="gateSubmit">로그인</button>
+      <div class="auth-switch"><span id="gateSwitchText">계정이 없으신가요?</span> <button class="linkbtn" id="gateSwitch">회원가입</button></div>
+    </div>
+    <div class="auth-msg" id="gateMsg"></div>
+    <div class="auth-foot">
+      <button class="linkbtn" id="gateGuest">로그인 없이 사용</button>
+      <button class="linkbtn" id="gateServer">서버 설정</button>
+    </div>
+  </div>
+</div>
 <div class="confirm-banner" id="confirmBanner" hidden>
   <div class="confirm-body">
     <div class="confirm-text" id="confirmText"></div>
@@ -647,6 +707,35 @@
   </div>
 
   <!-- ================= DELIBERATION ROUNDS ================= -->
+  <button class="settings-toggle" id="acctToggle" style="margin-top:14px;">계정 · 이전 대화 — 펼치기</button>
+  <div class="panel settings-body" id="acctBody">
+    <div id="acctLoginBox" hidden>
+      <label>이메일</label>
+      <input type="text" id="acctEmail" placeholder="you@example.com" autocomplete="username">
+      <label>비밀번호 (6자 이상)</label>
+      <input type="password" id="acctPw" autocomplete="current-password">
+      <div class="row" style="margin-top:8px;">
+        <button class="iconbtn acct-btn" id="acctSignInBtn">로그인</button>
+        <button class="iconbtn acct-btn" id="acctSignUpBtn">회원가입</button>
+      </div>
+    </div>
+    <div id="acctUserBox" hidden>
+      <div class="acct-user-row"><span>로그인됨: <b id="acctEmailLabel"></b></span><button class="linkbtn" id="acctSignOutBtn">로그아웃</button></div>
+      <label>이전 대화</label>
+      <div class="sess-list" id="sessionList"></div>
+    </div>
+    <div class="key-check-result" id="acctStatus"></div>
+    <details class="sb-config" id="sbConfigBox">
+      <summary>동기화 서버 설정 (Supabase)</summary>
+      <label>Project URL</label>
+      <input type="text" id="sbUrlInput" placeholder="https://xxxx.supabase.co">
+      <label>anon public key</label>
+      <input type="password" id="sbKeyInput" placeholder="eyJ...">
+      <button class="iconbtn acct-btn" id="sbSaveBtn" style="margin-top:8px;">저장 후 연결</button>
+      <div class="hint">OpenRouter 등 AI API 키는 서버에 올라가지 않고 이 기기에만 저장됩니다. 서버에는 대화 내용만 저장됩니다.</div>
+    </details>
+  </div>
+
   <div id="roundsContainer"></div>
 
   <!-- ================= INPUT PANEL ================= -->
@@ -779,7 +868,7 @@
     <div class="save-flash" id="saveFlash">설정 저장됨</div>
   </div>
 
-  <footer class="note">MAGI SYSTEM // TRI-NODE CONSENSUS ENGINE<br><span id="buildTag">BUILD v1.7.2</span></footer>
+  <footer class="note">MAGI SYSTEM // TRI-NODE CONSENSUS ENGINE<br><span id="buildTag">BUILD v1.10.1</span></footer>
 </div>
 
 <script>
@@ -791,7 +880,7 @@
 --------------------------------------------------------------------- */
 const LANG_RULE = "\n\n[언어 규칙] 모든 출력은 한국어로만 작성하십시오. 중국어 한자, 일본어, 영어 문장을 섞지 마십시오. 전문 용어는 한국어로 쓰고, 필요하면 괄호 안에 영문 원어를 병기하십시오.";
 
-const FORMAT_RULE = "\n\n[서식 규칙] answer, reasoning, final_answer 등 긴 서술형 필드는 가독성을 위해 다음 서식만 사용하십시오.\n- 항목을 나열할 때는 줄 앞에 \"- \"를 붙인 목록으로 쓰십시오.\n- 순서가 있으면 \"1. \", \"2. \" 형식의 번호 목록을 쓰십시오.\n- 핵심 결론이나 중요한 용어는 **이렇게** 두 개의 별표로 감싸 강조하십시오.\n- 논지가 바뀌면 빈 줄로 문단을 구분하십시오.\n- 제목(#), 표, 코드블록 등 다른 마크다운은 사용하지 마십시오.\n- 한두 문장으로 답이 충분하면 목록 없이 짧은 문단으로만 쓰십시오.";
+const FORMAT_RULE = "\n\n[서식 규칙] answer, reasoning, final_answer 등 긴 서술형 필드는 가독성을 위해 다음 서식만 사용하십시오.\n- 항목을 나열할 때는 줄 앞에 \"- \"를 붙인 목록으로 쓰십시오.\n- 순서가 있으면 \"1. \", \"2. \" 형식의 번호 목록을 쓰십시오.\n- 핵심 결론이나 중요한 용어는 **이렇게** 두 개의 별표로 감싸 강조하십시오.\n- 논지가 바뀌면 빈 줄로 문단을 구분하십시오.\n- 제목(#), 표, 코드블록 등 다른 마크다운은 사용하지 마십시오.\n- 한두 문장으로 답이 충분하면 목록 없이 짧은 문단으로만 쓰십시오.\n- 수식은 LaTeX로 쓰되 반드시 $...$ 로 감싸십시오. JSON 문자열 안이므로 백슬래시는 두 번 쓰십시오 (예: $\\frac{a}{b}$).";
 
 const NAMING_RULE = "\n\n[호칭 규칙] 세 노드의 이름은 반드시 다음 표기만 사용하십시오. 다른 음차나 변형은 금지합니다.\n- MELCHIOR-1 (멜키오르) : 이론·논리\n- BALTHASAR-2 (발타자르) : 감성·도덕\n- CASPER-3 (캐스퍼) : 전제·대안";
 
@@ -951,17 +1040,42 @@ let state = { busy:false, codeNum:132, raw:{}, provider:'openrouter', keys:{}, f
 // Small, self-contained markdown-lite renderer: bold, bullet/numbered lists,
 // and paragraph breaks. Everything is escaped first, so only the tags we add
 // ourselves ever reach the DOM.
+// JSON turns "\frac" into form-feed+"rac", "\theta" into tab+"heta", etc.
+// Put the backslashes back so LaTeX survives the round trip.
+function fixLatex(t){
+  return String(t||'')
+    .replace(/\x0c/g, '\\f')
+    .replace(/\x08/g, '\\b')
+    .replace(/\t(heta|imes|ext|au|an|o|ilde|riangle|hetaa)/g, '\\t$1')
+    .replace(/\r(ight|ho|angle)/g, '\\r$1')
+    .replace(/\n(abla|eq|u\b|ot\b)/g, '\\n$1');
+}
+function renderMathIn(el){
+  try{
+    if(el && window.renderMathInElement){
+      window.renderMathInElement(el, {
+        delimiters:[
+          {left:'$$', right:'$$', display:true},
+          {left:'\\[', right:'\\]', display:true},
+          {left:'\\(', right:'\\)', display:false},
+          {left:'$', right:'$', display:false}
+        ],
+        throwOnError:false
+      });
+    }
+  }catch(e){ /* math library unavailable - leave plain text */ }
+}
 function boldify(escapedText){
   return escapedText.replace(/\*\*(.+?)\*\*/g, '<strong class="hl">$1</strong>');
 }
 // For short one-line fields (e.g. a single critique line) — bold only, no block layout.
 function mdInline(raw){
-  return boldify(escapeHtml(raw||''));
+  return boldify(escapeHtml(fixLatex(raw)));
 }
 // For longer prose — paragraphs and lists.
 function mdLite(raw){
   if(!raw) return '';
-  const esc = escapeHtml(String(raw));
+  const esc = escapeHtml(fixLatex(raw));
   const lines = esc.split(/\n/);
   let html = '', listBuf = [], listType = null, paraBuf = [];
   function flushList(){
@@ -2635,6 +2749,7 @@ function renderPhase1Card(key, data, rawText){
     mdLite(data.answer) +
     '<details><summary>판단 근거</summary>' + mdLite(data.reasoning) + '</details>' +
     '<pre class="raw">' + escapeHtml(rawText) + '</pre>';
+  renderMathIn(el);
 }
 // Flip the direction: what the OTHER nodes said about this node's conclusion.
 function receivedCritiques(target, allResults){
@@ -2693,6 +2808,7 @@ function renderPhase2Card(key, data, prevConf, rawText, allResults){
     ownHtml +
     '<details><summary>판단 근거</summary>' + mdLite(data.reasoning) + '</details>' +
     '<pre class="raw">' + escapeHtml(rawText) + '</pre>';
+  renderMathIn(el);
 }
 function setNodeDiamond(key, confidence, isError, isBusy){
   const el = document.querySelector('.node[data-node="' + key + '"]');
@@ -2736,6 +2852,7 @@ function renderFinal(fin, p2results){
     : 'FINAL_ANSWER ── 통합 판단 AI';
   wrap.querySelector('[data-role="answer"]').innerHTML = mdLite(fin.final_answer);
   wrap.querySelector('[data-role="reasoning"]').innerHTML = mdLite(fin.reasoning);
+  renderMathIn(wrap);
   wrap.querySelector('[data-role="conf"]').textContent = 'MAGI 종합 신뢰도: ' + fin.confidence + '%';
 
   let rows = '<div class="ttl">노드별 신뢰도</div>';
@@ -2939,6 +3056,7 @@ function updateInputMode(){
 }
 
 function resetSession(){
+  state.sessionId = null;
   state.history = [];
   state.round = 0;
   state.raw = {};
@@ -3079,6 +3197,7 @@ async function handleSubmit(){
     });
     questionInput.value = '';
     updateInputMode();
+    saveCurrentSession();
     setStatus('done', '심의 완료 · ' + pLabel + ' · 이어서 질문할 수 있습니다');
   }catch(err){
     if(state.cancelled){
@@ -3092,6 +3211,264 @@ async function handleSubmit(){
     currentAbortController = null;
     setBusy(false);
   }
+}
+
+/* ---------------------------------------------------------------------
+   Account & sync (Supabase)
+--------------------------------------------------------------------- */
+const SB_CFG_KEY = 'magi_sb_config';
+let sb = null, sbUser = null;
+const acctToggle = $('acctToggle'), acctBody = $('acctBody');
+const acctLoginBox = $('acctLoginBox'), acctUserBox = $('acctUserBox');
+const acctEmail = $('acctEmail'), acctPw = $('acctPw'), acctEmailLabel = $('acctEmailLabel');
+const acctStatus = $('acctStatus'), sessionList = $('sessionList');
+const sbConfigBox = $('sbConfigBox'), sbUrlInput = $('sbUrlInput'), sbKeyInput = $('sbKeyInput');
+
+// Fill these in once to skip the server-setup step for everyone who opens the site.
+// The anon key is meant to be public; the row-level security policy keeps data private.
+const DEFAULT_SB_URL = 'https://ictjkqbbcaigdvlysdaw.supabase.co';
+const DEFAULT_SB_KEY = 'sb_publishable_C7jZEKJn_nF2Y3Ngq5f80Q_RA5Wrfux';
+function loadSbConfig(){
+  let c = {};
+  try{ c = JSON.parse(localStorage.getItem(SB_CFG_KEY) || 'null') || {}; }catch(e){}
+  return { url: c.url || DEFAULT_SB_URL, key: c.key || DEFAULT_SB_KEY };
+}
+function saveSbConfig(cfg){
+  try{ localStorage.setItem(SB_CFG_KEY, JSON.stringify(cfg)); }catch(e){}
+}
+function acctMsg(text, color){
+  acctStatus.textContent = text || '';
+  acctStatus.style.color = color || 'var(--text-dim)';
+}
+function updateAcctToggleLabel(){
+  if(!sbUser){ acctToggle.textContent = '로그인 / 회원가입'; acctBody.classList.remove('show'); return; }
+  const open = acctBody.classList.contains('show');
+  acctToggle.textContent = '계정 · 이전 대화' + (sbUser ? ' (' + (sbUser.email||'') + ')' : '') +
+    ' — ' + (open ? '접기' : '펼치기');
+}
+function renderAccount(){
+  const ready = !!sb;
+  acctLoginBox.hidden = true;   // login lives on the start screen now
+  acctUserBox.hidden = !sbUser;
+  if(!ready){
+    sbConfigBox.open = true;
+    if(!acctStatus.textContent) acctMsg('먼저 아래 "동기화 서버 설정"에 Supabase 주소와 키를 입력하세요.');
+  } else if(sbUser){
+    acctEmailLabel.textContent = sbUser.email || '';
+    loadSessionList();
+  } else {
+    sessionList.innerHTML = '';
+  }
+  updateAcctToggleLabel();
+  renderGate();
+}
+function connectSupabase(){
+  const cfg = loadSbConfig();
+  sb = null; sbUser = null;
+  if(!cfg.url || !cfg.key){ renderAccount(); return; }
+  if(!window.supabase){ gateMsgSet('로그인 서버에 연결하지 못했습니다. 인터넷 연결을 확인하거나 로그인 없이 사용하세요.', 'var(--red)'); acctMsg('동기화 라이브러리를 불러오지 못했습니다. 인터넷 연결을 확인하세요.', 'var(--red)'); renderAccount(); return; }
+  try{ sb = window.supabase.createClient(cfg.url, cfg.key); }
+  catch(e){ sb = null; acctMsg('연결 설정이 올바르지 않습니다: ' + e.message, 'var(--red)'); renderAccount(); return; }
+  sb.auth.onAuthStateChange((_ev, session)=>{
+    sbUser = session ? session.user : null;
+    renderAccount();
+  });
+  sb.auth.getSession().then(({data})=>{
+    sbUser = data && data.session ? data.session.user : null;
+    acctMsg('');
+    renderAccount();
+  });
+}
+async function acctSignUp(){
+  if(!sb) return acctMsg('동기화 서버 설정을 먼저 하세요.', 'var(--red)');
+  const email = acctEmail.value.trim(), pw = acctPw.value;
+  if(!email || pw.length < 6) return acctMsg('이메일과 6자 이상 비밀번호를 입력하세요.', 'var(--red)');
+  acctMsg('가입 중...');
+  const { data, error } = await sb.auth.signUp({ email:email, password:pw,
+    options:{ emailRedirectTo: location.origin + location.pathname } });
+  if(error) return acctMsg('가입 실패: ' + error.message, 'var(--red)');
+  if(data && data.session) acctMsg('가입 완료. 로그인되었습니다.', 'var(--green-core)');
+  else acctMsg('가입 완료. 메일함의 확인 링크를 누른 뒤 로그인하세요.', 'var(--amber)');
+}
+async function acctSignIn(){
+  if(!sb) return acctMsg('동기화 서버 설정을 먼저 하세요.', 'var(--red)');
+  const email = acctEmail.value.trim(), pw = acctPw.value;
+  if(!email || !pw) return acctMsg('이메일과 비밀번호를 입력하세요.', 'var(--red)');
+  acctMsg('로그인 중...');
+  const { error } = await sb.auth.signInWithPassword({ email:email, password:pw });
+  if(error) return acctMsg('로그인 실패: ' + error.message, 'var(--red)');
+  acctPw.value = '';
+  acctMsg('로그인되었습니다. 이제 대화가 자동 저장됩니다.', 'var(--green-core)');
+}
+async function acctSignOut(){
+  state.guest = false;
+  if(sb) await sb.auth.signOut();
+  state.sessionId = null;
+  acctMsg('로그아웃되었습니다.');
+}
+function newSessionId(){
+  if(window.crypto && crypto.randomUUID) return crypto.randomUUID();
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c=>{
+    const r = Math.random()*16|0; return (c==='x' ? r : (r&3|8)).toString(16);
+  });
+}
+async function saveCurrentSession(){
+  if(!sb || !sbUser || !state.history.length) return;
+  if(!state.sessionId) state.sessionId = newSessionId();
+  const title = String(state.history[0].question || '제목 없음').replace(/\s+/g,' ').slice(0,60);
+  const { error } = await sb.from('magi_sessions').upsert({
+    id: state.sessionId, user_id: sbUser.id, title: title,
+    data: { html: roundsContainer.innerHTML, history: state.history, round: state.round },
+    updated_at: new Date().toISOString()
+  });
+  if(error) acctMsg('대화 저장 실패: ' + error.message, 'var(--red)');
+  else loadSessionList();
+}
+async function loadSessionList(){
+  if(!sb || !sbUser) return;
+  const { data, error } = await sb.from('magi_sessions')
+    .select('id,title,updated_at').order('updated_at', { ascending:false }).limit(50);
+  if(error){ sessionList.innerHTML = ''; return acctMsg('목록 불러오기 실패: ' + error.message, 'var(--red)'); }
+  if(!data.length){ sessionList.innerHTML = '<div class="hint">저장된 대화가 없습니다.</div>'; return; }
+  sessionList.innerHTML = data.map(r=>{
+    const d = new Date(r.updated_at);
+    const when = (d.getMonth()+1) + '/' + d.getDate() + ' ' +
+      String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+    return '<div class="sess-item' + (r.id === state.sessionId ? ' on' : '') + '">' +
+      '<button class="sess-open" data-id="' + r.id + '"><span class="sess-title">' +
+      escapeHtml(r.title || '제목 없음') + '</span><span class="sess-when">' + when + '</span></button>' +
+      '<button class="sess-del" data-id="' + r.id + '">삭제</button></div>';
+  }).join('');
+}
+async function openSession(id){
+  if(state.busy || !sb) return;
+  acctMsg('불러오는 중...');
+  const { data, error } = await sb.from('magi_sessions').select('data').eq('id', id).single();
+  if(error || !data) return acctMsg('대화를 불러오지 못했습니다' + (error ? ': ' + error.message : ''), 'var(--red)');
+  const d = data.data || {};
+  resetSession();
+  roundsContainer.innerHTML = d.html || '';
+  state.history = Array.isArray(d.history) ? d.history : [];
+  state.round = d.round || state.history.length;
+  state.sessionId = id;
+  updateInputMode();
+  renderMathIn(roundsContainer);
+  acctMsg('');
+  setStatus('', '이전 대화를 불러왔습니다 — 이어서 질문할 수 있습니다');
+  loadSessionList();
+}
+async function deleteSession(id){
+  if(!sb) return;
+  const { error } = await sb.from('magi_sessions').delete().eq('id', id);
+  if(error) return acctMsg('삭제 실패: ' + error.message, 'var(--red)');
+  if(state.sessionId === id) state.sessionId = null;
+  loadSessionList();
+}
+function initAccount(){
+  const cfg = loadSbConfig();
+  sbUrlInput.value = cfg.url || '';
+  sbKeyInput.value = cfg.key || '';
+  acctToggle.addEventListener('click', ()=>{
+    if(!sbUser){ state.guest = false; renderGate(); return; }
+    acctBody.classList.toggle('show');
+    updateAcctToggleLabel();
+  });
+  $('sbSaveBtn').addEventListener('click', ()=>{
+    saveSbConfig({ url: sbUrlInput.value.trim().replace(/\/+$/,''), key: sbKeyInput.value.trim() });
+    acctMsg('연결 중...');
+    connectSupabase();
+  });
+  $('acctSignInBtn').addEventListener('click', acctSignIn);
+  $('acctSignUpBtn').addEventListener('click', acctSignUp);
+  $('acctSignOutBtn').addEventListener('click', acctSignOut);
+  sessionList.addEventListener('click', (e)=>{
+    const openBtn = e.target.closest('.sess-open');
+    const delBtn = e.target.closest('.sess-del');
+    if(openBtn) openSession(openBtn.getAttribute('data-id'));
+    else if(delBtn){
+      const id = delBtn.getAttribute('data-id');
+      showConfirmBanner('이 대화를 삭제할까요?', '※ 삭제한 대화는 복구할 수 없습니다', ()=>deleteSession(id));
+    }
+  });
+  initGate();
+  connectSupabase();
+}
+
+/* ---------------------------------------------------------------------
+   Start screen (login / sign-up gate)
+--------------------------------------------------------------------- */
+let gateMode = 'login', gateShowSetup = false;
+const authGate = $('authGate'), authSub = $('authSub'), authSetup = $('authSetup'), authForm = $('authForm');
+const gateEmail = $('gateEmail'), gatePw = $('gatePw'), gatePw2 = $('gatePw2');
+const gateSubmit = $('gateSubmit'), gateSwitch = $('gateSwitch'), gateSwitchText = $('gateSwitchText');
+const gateMsg = $('gateMsg'), gateSbUrl = $('gateSbUrl'), gateSbKey = $('gateSbKey');
+
+function gateMsgSet(t, c){ gateMsg.textContent = t || ''; gateMsg.style.color = c || 'var(--text-dim)'; }
+
+function renderGate(){
+  const ready = !!sb;
+  authGate.hidden = !!sbUser || !!state.guest;
+  authSetup.hidden = ready && !gateShowSetup;
+  authForm.hidden = !ready;
+  const signup = gateMode === 'signup';
+  authSub.textContent = !ready ? '서버 설정' : (signup ? '회원가입' : '로그인');
+  gatePw2.hidden = !signup;
+  gateSubmit.textContent = signup ? '회원가입' : '로그인';
+  gateSwitchText.textContent = signup ? '이미 계정이 있으신가요?' : '계정이 없으신가요?';
+  gateSwitch.textContent = signup ? '로그인' : '회원가입';
+}
+
+async function gateSubmitFn(){
+  if(!sb) return;
+  const email = gateEmail.value.trim(), pw = gatePw.value;
+  if(!email || pw.length < 6) return gateMsgSet('이메일과 6자 이상 비밀번호를 입력하세요.', 'var(--red)');
+  gateSubmit.disabled = true;
+  try{
+    if(gateMode === 'signup'){
+      if(pw !== gatePw2.value) return gateMsgSet('비밀번호가 서로 다릅니다.', 'var(--red)');
+      gateMsgSet('가입 중...');
+      const { data, error } = await sb.auth.signUp({ email:email, password:pw,
+        options:{ emailRedirectTo: location.origin + location.pathname } });
+      if(error) return gateMsgSet('가입 실패: ' + error.message, 'var(--red)');
+      if(!(data && data.session)){
+        gateMode = 'login'; renderGate();
+        return gateMsgSet('가입 완료. 메일함의 확인 링크를 누른 뒤 로그인하세요.', 'var(--amber)');
+      }
+    } else {
+      gateMsgSet('로그인 중...');
+      const { error } = await sb.auth.signInWithPassword({ email:email, password:pw });
+      if(error) return gateMsgSet('로그인 실패: ' + error.message, 'var(--red)');
+    }
+    gateMsgSet('');
+    gatePw.value = ''; gatePw2.value = '';
+  } finally {
+    gateSubmit.disabled = false;
+  }
+}
+
+function initGate(){
+  gateSubmit.addEventListener('click', gateSubmitFn);
+  [gateEmail, gatePw, gatePw2].forEach(el=>el.addEventListener('keydown', e=>{
+    if(e.key === 'Enter'){ e.preventDefault(); gateSubmitFn(); }
+  }));
+  gateSwitch.addEventListener('click', ()=>{
+    gateMode = gateMode === 'signup' ? 'login' : 'signup';
+    gateMsgSet(''); renderGate();
+  });
+  $('gateGuest').addEventListener('click', ()=>{ state.guest = true; renderGate(); });
+  $('gateServer').addEventListener('click', ()=>{
+    const cfg = loadSbConfig();
+    gateSbUrl.value = cfg.url || ''; gateSbKey.value = cfg.key || '';
+    gateShowSetup = !gateShowSetup; renderGate();
+  });
+  $('gateSbSave').addEventListener('click', ()=>{
+    const url = gateSbUrl.value.trim().replace(/\/+$/,''), key = gateSbKey.value.trim();
+    if(!url || !key) return gateMsgSet('URL과 키를 모두 입력하세요.', 'var(--red)');
+    saveSbConfig({ url:url, key:key });
+    sbUrlInput.value = url; sbKeyInput.value = key;
+    gateShowSetup = false; gateMsgSet('연결 중...');
+    connectSupabase();
+  });
 }
 
 /* ---------------------------------------------------------------------
@@ -3227,6 +3604,7 @@ function init(){
     }
   });
   autoLoadOpenRouterModels();
+  initAccount();
 }
 
 if(document.readyState === 'loading'){
