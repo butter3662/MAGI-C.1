@@ -472,6 +472,29 @@
   .sb-config{margin-top:10px; font-size:11px; color:var(--text-dim);}
   .sb-config summary{cursor:pointer;}
 
+  .topbar-right{display:flex; gap:8px; align-items:center;}
+  .menu-btn{width:34px; height:28px; display:flex; flex-direction:column; justify-content:center; gap:5px;
+    padding:0 7px; background:transparent; border:1px solid var(--green-dim); border-radius:2px; cursor:pointer;}
+  .menu-btn span{display:block; height:2px; background:var(--green-core); border-radius:1px; box-shadow:0 0 4px var(--green-core);}
+  .drawer-scrim{position:fixed; inset:0; z-index:69; background:rgba(0,0,0,0.6);
+    opacity:0; pointer-events:none; transition:opacity .3s ease;}
+  .drawer-scrim.show{opacity:1; pointer-events:auto;}
+  .drawer{position:fixed; top:0; right:0; bottom:0; z-index:70; width:min(86vw,340px);
+    background:#030a06; border-left:1px solid var(--green-core);
+    box-shadow:-10px 0 34px rgba(61,255,198,0.10);
+    transform:translateX(105%); transition:transform .38s cubic-bezier(.2,.85,.25,1);
+    display:flex; flex-direction:column; padding:16px 14px 24px; overflow-y:auto;}
+  .drawer.show{transform:translateX(0);}
+  .drawer-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;
+    font-family:var(--font-display); font-size:12px; letter-spacing:2px; color:var(--green-core);}
+  .drawer-close{background:transparent; border:none; color:var(--text-dim); font-size:16px; cursor:pointer; padding:2px 6px;}
+  .new-chat-btn{width:100%; padding:11px; margin-bottom:14px; background:transparent; cursor:pointer;
+    border:1px solid var(--amber); color:var(--amber); border-radius:2px;
+    font-family:var(--font-mono); font-size:12.5px; letter-spacing:1px;}
+  .new-chat-btn[hidden], .settings-toggle[hidden]{display:none;}
+  .drawer .settings-body{display:block; margin-top:0;}
+  .drawer #acctBody{border:none; background:transparent; box-shadow:none; padding:0;}
+  .drawer .sess-list{max-height:none;}
   .auth-gate{position:fixed; inset:0; z-index:90; overflow-y:auto; padding:20px;
     background:radial-gradient(ellipse at 50% 30%, rgba(61,255,198,0.08), transparent 60%), #030704;
     display:flex; align-items:center; justify-content:center;}
@@ -635,6 +658,39 @@
     </div>
   </div>
 </div>
+<div class="drawer-scrim" id="drawerScrim"></div>
+<aside class="drawer" id="drawer" aria-hidden="true">
+  <div class="drawer-head"><span>MAGI // RECORDS</span><button class="drawer-close" id="drawerClose" title="닫기">✕</button></div>
+  <button class="new-chat-btn" id="resetBtn">새 대화 시작</button>
+  <button class="settings-toggle" id="acctToggle">로그인 / 회원가입</button>
+  <div class="panel settings-body" id="acctBody">
+    <div id="acctLoginBox" hidden>
+      <label>이메일</label>
+      <input type="text" id="acctEmail" placeholder="you@example.com" autocomplete="username">
+      <label>비밀번호 (6자 이상)</label>
+      <input type="password" id="acctPw" autocomplete="current-password">
+      <div class="row" style="margin-top:8px;">
+        <button class="iconbtn acct-btn" id="acctSignInBtn">로그인</button>
+        <button class="iconbtn acct-btn" id="acctSignUpBtn">회원가입</button>
+      </div>
+    </div>
+    <div id="acctUserBox" hidden>
+      <div class="acct-user-row"><span>로그인됨: <b id="acctEmailLabel"></b></span><button class="linkbtn" id="acctSignOutBtn">로그아웃</button></div>
+      <label>최근 대화</label>
+      <div class="sess-list" id="sessionList"></div>
+    </div>
+    <div class="key-check-result" id="acctStatus"></div>
+    <details class="sb-config" id="sbConfigBox">
+      <summary>동기화 서버 설정 (Supabase)</summary>
+      <label>Project URL</label>
+      <input type="text" id="sbUrlInput" placeholder="https://xxxx.supabase.co">
+      <label>anon public key</label>
+      <input type="password" id="sbKeyInput" placeholder="eyJ...">
+      <button class="iconbtn acct-btn" id="sbSaveBtn" style="margin-top:8px;">저장 후 연결</button>
+      <div class="hint">OpenRouter 등 AI API 키는 서버에 올라가지 않고 이 기기에만 저장됩니다. 서버에는 대화 내용만 저장됩니다.</div>
+    </details>
+  </div>
+</aside>
 <div class="confirm-banner" id="confirmBanner" hidden>
   <div class="confirm-body">
     <div class="confirm-text" id="confirmText"></div>
@@ -660,7 +716,10 @@
       <span class="line">FILE:MAGI_SYS</span>
       <span class="line">EXTENTION:2048&nbsp;&nbsp;PRIORITY:A</span>
     </div>
-    <button class="badge" id="statusBadge" title="심의 상태">대기중</button>
+    <div class="topbar-right">
+      <button class="badge" id="statusBadge" title="심의 상태">대기중</button>
+      <button class="menu-btn" id="menuBtn" title="최근 대화" aria-label="메뉴"><span></span><span></span><span></span></button>
+    </div>
   </div>
 
   <div class="hero">
@@ -707,43 +766,12 @@
     <div class="stage-caption">삼위 합의 판단 시스템</div>
   </div>
 
-  <!-- ================= DELIBERATION ROUNDS ================= -->
-  <button class="settings-toggle" id="acctToggle" style="margin-top:14px;">계정 · 이전 대화 — 펼치기</button>
-  <div class="panel settings-body" id="acctBody">
-    <div id="acctLoginBox" hidden>
-      <label>이메일</label>
-      <input type="text" id="acctEmail" placeholder="you@example.com" autocomplete="username">
-      <label>비밀번호 (6자 이상)</label>
-      <input type="password" id="acctPw" autocomplete="current-password">
-      <div class="row" style="margin-top:8px;">
-        <button class="iconbtn acct-btn" id="acctSignInBtn">로그인</button>
-        <button class="iconbtn acct-btn" id="acctSignUpBtn">회원가입</button>
-      </div>
-    </div>
-    <div id="acctUserBox" hidden>
-      <div class="acct-user-row"><span>로그인됨: <b id="acctEmailLabel"></b></span><button class="linkbtn" id="acctSignOutBtn">로그아웃</button></div>
-      <label>이전 대화</label>
-      <div class="sess-list" id="sessionList"></div>
-    </div>
-    <div class="key-check-result" id="acctStatus"></div>
-    <details class="sb-config" id="sbConfigBox">
-      <summary>동기화 서버 설정 (Supabase)</summary>
-      <label>Project URL</label>
-      <input type="text" id="sbUrlInput" placeholder="https://xxxx.supabase.co">
-      <label>anon public key</label>
-      <input type="password" id="sbKeyInput" placeholder="eyJ...">
-      <button class="iconbtn acct-btn" id="sbSaveBtn" style="margin-top:8px;">저장 후 연결</button>
-      <div class="hint">OpenRouter 등 AI API 키는 서버에 올라가지 않고 이 기기에만 저장됩니다. 서버에는 대화 내용만 저장됩니다.</div>
-    </details>
-  </div>
-
   <div id="roundsContainer"></div>
 
   <!-- ================= INPUT PANEL ================= -->
   <div class="panel" id="inputPanel">
-    <div class="panel-title" id="panelTitleRow">
+    <div class="panel-title" id="panelTitleRow" style="display:none">
       <span id="inputTitle" hidden></span>
-      <button class="linkbtn" id="resetBtn">새 심의 시작</button>
     </div>
     <div class="env-banner" id="envBanner"></div>
     <div id="composeArea">
@@ -869,7 +897,7 @@
     <div class="save-flash" id="saveFlash">설정 저장됨</div>
   </div>
 
-  <footer class="note">MAGI SYSTEM // TRI-NODE CONSENSUS ENGINE<br><span id="buildTag">BUILD v1.10.2</span></footer>
+  <footer class="note">MAGI SYSTEM // TRI-NODE CONSENSUS ENGINE<br><span id="buildTag">BUILD v1.11.0</span></footer>
 </div>
 
 <script>
@@ -881,7 +909,7 @@
 --------------------------------------------------------------------- */
 const LANG_RULE = "\n\n[언어 규칙] 모든 출력은 한국어로만 작성하십시오. 중국어 한자, 일본어, 영어 문장을 섞지 마십시오. 전문 용어는 한국어로 쓰고, 필요하면 괄호 안에 영문 원어를 병기하십시오.";
 
-const FORMAT_RULE = "\n\n[서식 규칙] answer, reasoning, final_answer 등 긴 서술형 필드는 가독성을 위해 다음 서식만 사용하십시오.\n- 항목을 나열할 때는 줄 앞에 \"- \"를 붙인 목록으로 쓰십시오.\n- 순서가 있으면 \"1. \", \"2. \" 형식의 번호 목록을 쓰십시오.\n- 핵심 결론이나 중요한 용어는 **이렇게** 두 개의 별표로 감싸 강조하십시오.\n- 논지가 바뀌면 빈 줄로 문단을 구분하십시오.\n- 제목(#), 표, 코드블록 등 다른 마크다운은 사용하지 마십시오.\n- 한두 문장으로 답이 충분하면 목록 없이 짧은 문단으로만 쓰십시오.\n- 수식은 LaTeX로 쓰되 반드시 $...$ 로 감싸십시오. JSON 문자열 안이므로 백슬래시는 두 번 쓰십시오 (예: $\\frac{a}{b}$).";
+const FORMAT_RULE = "\n\n[서식 규칙] answer, reasoning, final_answer 등 긴 서술형 필드는 가독성을 위해 다음 서식만 사용하십시오.\n- 항목을 나열할 때는 줄 앞에 \"- \"를 붙인 목록으로 쓰십시오.\n- 순서가 있으면 \"1. \", \"2. \" 형식의 번호 목록을 쓰십시오.\n- 핵심 결론이나 중요한 용어는 **이렇게** 두 개의 별표로 감싸 강조하십시오.\n- 논지가 바뀌면 빈 줄로 문단을 구분하십시오.\n- 제목(#), 표, 코드블록 등 다른 마크다운은 사용하지 마십시오.\n- 한두 문장으로 답이 충분하면 목록 없이 짧은 문단으로만 쓰십시오.\n- 수식은 LaTeX로 쓰되 반드시 $...$ 로 감싸십시오. JSON 문자열 안이므로 수식의 백슬래시만 두 번 쓰고 줄바꿈 기호는 두 번 쓰지 마십시오 (예: $\\frac{a}{b}$).";
 
 const NAMING_RULE = "\n\n[호칭 규칙] 세 노드의 이름은 반드시 다음 표기만 사용하십시오. 다른 음차나 변형은 금지합니다.\n- MELCHIOR-1 (멜키오르) : 이론·논리\n- BALTHASAR-2 (발타자르) : 감성·도덕\n- CASPER-3 (캐스퍼) : 전제·대안";
 
@@ -927,7 +955,7 @@ const NODES = {
 };
 const NODE_ORDER = ['melchior','balthasar','casper'];
 
-const SUPREME_SYSTEM = "당신은 MAGI 시스템 전체를 지배하는 최상위 통합 판단 AI입니다. 스스로를 'MAGI'라고만 칭합니다.\n\n아래는 세 연산 노드가 독립적으로 사고한 뒤(1차), 서로를 비판하며 정교화한(2차) 최종 결과입니다:\n- MELCHIOR-1: 이론·논리 (도덕성 미고려, 전제가 참일 때 결론이 타당한지 검증)\n- BALTHASAR-2: 감성·도덕 (전제가 참일 때 결론이 옳은지 검증)\n- CASPER-3: 전제·대안 (전제 자체가 완전한지 의심하고, 선택지 밖의 대안을 탐색)\n\n당신의 임무는 어느 한쪽에 치우치지 않고, 각 노드의 신뢰도와 논거의 타당성을 종합적으로 고려하여 최종 결론을 내리는 것입니다. 논리만 따르지도, 감정만 따르지도 않으며, 세 관점을 실제로 통합한 균형잡힌 결론을 도출하십시오. 모든 답변은 한국어로 작성합니다.\n\n반드시 아래 JSON 형식으로만 답하십시오. 그 외의 설명, 마크다운 코드블록은 절대 포함하지 마십시오.\n{\"query_type\": \"decision 또는 open 중 하나\", \"verdict\": \"query_type이 decision일 때만 가결/보류/기각 중 하나, open이면 빈 문자열\", \"final_answer\": \"최종 결론 (구체적이고 실행 가능하게, 4~8문장)\", \"reasoning\": \"세 노드의 의견을 어떻게 반영했는지 포함한 판단 근거 (3~6문장)\", \"confidence\": 0에서 100 사이의 정수, \"influence\": {\"melchior\": 정수, \"balthasar\": 정수, \"casper\": 정수}}\n\ninfluence는 최종 결론에 각 노드의 의견이 실제로 반영된 비율입니다. 세 값의 합은 반드시 100이어야 합니다.\n\nquery_type 판별 기준:\n- decision: 찬반, 채택 여부, 실행 여부, 옳고 그름 등 어떤 안건에 대한 가부 판단을 요구하는 질의. 이때만 verdict에 가결/보류/기각을 채웁니다.\n- open: 설명, 분석, 해설, 방법 제시, 비교, 서술형 답변을 요구하는 질의. 이때 verdict는 반드시 빈 문자열로 두십시오. 억지로 가부를 판정하지 마십시오." + NAMING_RULE + LANG_RULE + FORMAT_RULE;
+const SUPREME_SYSTEM = "당신은 MAGI 시스템 전체를 지배하는 최상위 통합 판단 AI입니다. 스스로를 'MAGI'라고만 칭합니다.\n\n아래는 세 연산 노드가 독립적으로 사고한 뒤(1차), 서로를 비판하며 정교화한(2차) 최종 결과입니다:\n- MELCHIOR-1: 이론·논리 (도덕성 미고려, 전제가 참일 때 결론이 타당한지 검증)\n- BALTHASAR-2: 감성·도덕 (전제가 참일 때 결론이 옳은지 검증)\n- CASPER-3: 전제·대안 (전제 자체가 완전한지 의심하고, 선택지 밖의 대안을 탐색)\n\n당신의 임무는 어느 한쪽에 치우치지 않고, 각 노드의 신뢰도와 논거의 타당성을 종합적으로 고려하여 최종 결론을 내리는 것입니다. 논리만 따르지도, 감정만 따르지도 않으며, 세 관점을 실제로 통합한 균형잡힌 결론을 도출하십시오. 모든 답변은 한국어로 작성합니다.\n\n반드시 아래 JSON 형식으로만 답하십시오. 그 외의 설명, 마크다운 코드블록은 절대 포함하지 마십시오.\n{\"title\": \"이 대화 전체를 대표하는 짧은 제목 (한국어 명사구, 20자 이내, 수식·기호 없이)\", \"query_type\": \"decision 또는 open 중 하나\", \"verdict\": \"query_type이 decision일 때만 가결/보류/기각 중 하나, open이면 빈 문자열\", \"final_answer\": \"최종 결론 (구체적이고 실행 가능하게, 4~8문장)\", \"reasoning\": \"세 노드의 의견을 어떻게 반영했는지 포함한 판단 근거 (3~6문장)\", \"confidence\": 0에서 100 사이의 정수, \"influence\": {\"melchior\": 정수, \"balthasar\": 정수, \"casper\": 정수}}\n\ninfluence는 최종 결론에 각 노드의 의견이 실제로 반영된 비율입니다. 세 값의 합은 반드시 100이어야 합니다.\n\nquery_type 판별 기준:\n- decision: 찬반, 채택 여부, 실행 여부, 옳고 그름 등 어떤 안건에 대한 가부 판단을 요구하는 질의. 이때만 verdict에 가결/보류/기각을 채웁니다.\n- open: 설명, 분석, 해설, 방법 제시, 비교, 서술형 답변을 요구하는 질의. 이때 verdict는 반드시 빈 문자열로 두십시오. 억지로 가부를 판정하지 마십시오." + NAMING_RULE + LANG_RULE + FORMAT_RULE;
 
 /* ---------------------------------------------------------------------
    PROVIDERS
@@ -1049,7 +1077,9 @@ function fixLatex(t){
     .replace(/\x08/g, '\\b')
     .replace(/\t(heta|imes|ext|au|an|o|ilde|riangle|hetaa)/g, '\\t$1')
     .replace(/\r(ight|ho|angle)/g, '\\r$1')
-    .replace(/\n(abla|eq|u\b|ot\b)/g, '\\n$1');
+    .replace(/\n(abla|eq|u\b|ot\b)/g, '\\n$1')
+    .replace(/\\n(?![a-z])/g, '\n')
+    .replace(/\\t(?![a-z])/g, ' ');
 }
 function renderMathIn(el){
   try{
@@ -1366,6 +1396,7 @@ function normalizeFinalResult(parsed, raw){
   if(!isDecision) verdict = '';
   const fa = pick(parsed, ['final_answer','finalAnswer','answer','최종답변']);
   return {
+    title: String(pick(parsed, ['title','제목']) || '').replace(/[*$#`\\]/g,'').replace(/\s+/g,' ').trim().slice(0,40),
     verdict: verdict,
     final_answer: fa !== undefined ? String(fa) : (raw||'').slice(0,900),
     reasoning: String(pick(parsed, ['reasoning','rationale','근거']) || ''),
@@ -1662,7 +1693,7 @@ function sysFor(nodeKey, phase){
   if(phase === 2) t += ANTI_ANCHOR_RULE;
   return t;
 }
-const MATH_REMINDER = "\n\n[수식 규칙 — 반드시 지킬 것] final_answer와 reasoning 안의 모든 수식·기호는 LaTeX로 쓰고 $...$ 로 감싸십시오. sec^3 x 같은 일반 텍스트 수식은 금지합니다. JSON 문자열이므로 백슬래시는 두 번 쓰십시오 (예: $\\int \\sec^3 x\\,dx$).";
+const MATH_REMINDER = "\n\n[수식 규칙 — 반드시 지킬 것] final_answer와 reasoning 안의 모든 수식·기호는 LaTeX로 쓰고 $...$ 로 감싸십시오. sec^3 x 같은 일반 텍스트 수식은 금지합니다. JSON 문자열이므로 수식의 백슬래시만 두 번 쓰고 줄바꿈 기호는 두 번 쓰지 마십시오 (예: $\\int \\sec^3 x\\,dx$).";
 function sysForSupreme(){
   return (isSolve() ? (SUPREME_SYSTEM + SOLVE_SUPREME_ADDENDUM) : SUPREME_SYSTEM) + MATH_REMINDER;
 }
@@ -3072,6 +3103,7 @@ function updateInputMode(){
 
 function resetSession(){
   state.sessionId = null;
+  state.title = null;
   state.history = [];
   state.round = 0;
   state.raw = {};
@@ -3203,6 +3235,7 @@ async function handleSubmit(){
     setStatus('busy', '최종 판정 — 통합 AI가 세 관점을 종합합니다 (' + pLabel + ')');
     const fin = await runFinal(fullQuestion, p2.results);
     renderFinal(fin, p2.results);
+    if(!state.title && fin.title) state.title = fin.title;
 
     state.history.push({
       question: effectiveQuestion,
@@ -3256,10 +3289,8 @@ function acctMsg(text, color){
   acctStatus.style.color = color || 'var(--text-dim)';
 }
 function updateAcctToggleLabel(){
-  if(!sbUser){ acctToggle.textContent = '로그인 / 회원가입'; acctBody.classList.remove('show'); return; }
-  const open = acctBody.classList.contains('show');
-  acctToggle.textContent = '계정 · 이전 대화' + (sbUser ? ' (' + (sbUser.email||'') + ')' : '') +
-    ' — ' + (open ? '접기' : '펼치기');
+  acctToggle.hidden = !!sbUser;
+  acctToggle.textContent = '로그인 / 회원가입';
 }
 function renderAccount(){
   const ready = !!sb;
@@ -3330,10 +3361,10 @@ function newSessionId(){
 async function saveCurrentSession(){
   if(!sb || !sbUser || !state.history.length) return;
   if(!state.sessionId) state.sessionId = newSessionId();
-  const title = String(state.history[0].question || '제목 없음').replace(/\s+/g,' ').slice(0,60);
+  const title = state.title || String(state.history[0].question || '제목 없음').replace(/\s+/g,' ').slice(0,60);
   const { error } = await sb.from('magi_sessions').upsert({
     id: state.sessionId, user_id: sbUser.id, title: title,
-    data: { html: roundsContainer.innerHTML, history: state.history, round: state.round },
+    data: { html: roundsContainer.innerHTML, history: state.history, round: state.round, title: state.title || null },
     updated_at: new Date().toISOString()
   });
   if(error) acctMsg('대화 저장 실패: ' + error.message, 'var(--red)');
@@ -3358,7 +3389,7 @@ async function loadSessionList(){
 async function openSession(id){
   if(state.busy || !sb) return;
   acctMsg('불러오는 중...');
-  const { data, error } = await sb.from('magi_sessions').select('data').eq('id', id).single();
+  const { data, error } = await sb.from('magi_sessions').select('data,title').eq('id', id).single();
   if(error || !data) return acctMsg('대화를 불러오지 못했습니다' + (error ? ': ' + error.message : ''), 'var(--red)');
   const d = data.data || {};
   resetSession();
@@ -3366,6 +3397,8 @@ async function openSession(id){
   state.history = Array.isArray(d.history) ? d.history : [];
   state.round = d.round || state.history.length;
   state.sessionId = id;
+  state.title = d.title || data.title || null;
+  closeDrawer();
   updateInputMode();
   renderMathIn(roundsContainer);
   acctMsg('');
@@ -3379,14 +3412,26 @@ async function deleteSession(id){
   if(state.sessionId === id) state.sessionId = null;
   loadSessionList();
 }
+const drawer = $('drawer'), drawerScrim = $('drawerScrim');
+function openDrawer(){
+  drawer.classList.add('show'); drawerScrim.classList.add('show');
+  drawer.setAttribute('aria-hidden','false');
+  if(sbUser) loadSessionList();
+}
+function closeDrawer(){
+  drawer.classList.remove('show'); drawerScrim.classList.remove('show');
+  drawer.setAttribute('aria-hidden','true');
+}
 function initAccount(){
+  $('menuBtn').addEventListener('click', openDrawer);
+  $('drawerClose').addEventListener('click', closeDrawer);
+  drawerScrim.addEventListener('click', closeDrawer);
+  document.addEventListener('keydown', (e)=>{ if(e.key === 'Escape') closeDrawer(); });
   const cfg = loadSbConfig();
   sbUrlInput.value = cfg.url || '';
   sbKeyInput.value = cfg.key || '';
   acctToggle.addEventListener('click', ()=>{
-    if(!sbUser){ state.guest = false; renderGate(); return; }
-    acctBody.classList.toggle('show');
-    updateAcctToggleLabel();
+    if(!sbUser){ closeDrawer(); state.guest = false; renderGate(); }
   });
   $('sbSaveBtn').addEventListener('click', ()=>{
     saveSbConfig({ url: sbUrlInput.value.trim().replace(/\/+$/,''), key: sbKeyInput.value.trim() });
@@ -3599,6 +3644,7 @@ function init(){
     fileInput.value = '';   // allow re-picking the same file
   });
   resetBtn.addEventListener('click', ()=>{
+    closeDrawer();
     showConfirmBanner('새 심의를 시작할까요?', '※ 현재 대화 내용이 초기화됩니다', ()=>{ if(!state.busy) resetSession(); });
   });
   confirmYesBtn.addEventListener('click', ()=>{
