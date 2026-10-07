@@ -489,6 +489,7 @@
   .auth-note{font-size:11px; color:var(--text-dim); line-height:1.5; text-align:center;}
   .auth-foot{display:flex; justify-content:space-between; margin-top:12px;}
 
+  .mini-compare .ttl{font-size:10px; letter-spacing:1px; color:var(--text-dim); margin-bottom:7px;}
   /* ---------- results ---------- */
   .phase-block{margin-top:22px; display:none;}
   .phase-block.show{display:block;}
@@ -868,7 +869,7 @@
     <div class="save-flash" id="saveFlash">설정 저장됨</div>
   </div>
 
-  <footer class="note">MAGI SYSTEM // TRI-NODE CONSENSUS ENGINE<br><span id="buildTag">BUILD v1.10.1</span></footer>
+  <footer class="note">MAGI SYSTEM // TRI-NODE CONSENSUS ENGINE<br><span id="buildTag">BUILD v1.10.2</span></footer>
 </div>
 
 <script>
@@ -1065,17 +1066,30 @@ function renderMathIn(el){
     }
   }catch(e){ /* math library unavailable - leave plain text */ }
 }
+const SUP = {'0':'⁰','1':'¹','2':'²','3':'³','4':'⁴','5':'⁵','6':'⁶','7':'⁷','8':'⁸','9':'⁹','-':'⁻','+':'⁺','n':'ⁿ'};
+function prettifyMath(t){
+  return t
+    .replace(/\^\(?([-+]?\d+|n)\)?/g, (_, d)=>d.split('').map(c=>SUP[c]||c).join(''))
+    .replace(/\(1\/2\)/g,'½').replace(/\(1\/3\)/g,'⅓').replace(/\(2\/3\)/g,'⅔')
+    .replace(/\(1\/4\)/g,'¼').replace(/\(3\/4\)/g,'¾')
+    .replace(/sqrt\(/g,'√(')
+    .replace(/&lt;=/g,'≤').replace(/&gt;=/g,'≥').replace(/!=/g,'≠')
+    .replace(/-&gt;/g,'→').replace(/\binf(inity)?\b/g,'∞');
+}
 function boldify(escapedText){
   return escapedText.replace(/\*\*(.+?)\*\*/g, '<strong class="hl">$1</strong>');
 }
 // For short one-line fields (e.g. a single critique line) — bold only, no block layout.
 function mdInline(raw){
-  return boldify(escapeHtml(fixLatex(raw)));
+  let esc = escapeHtml(fixLatex(raw));
+  if(esc.indexOf('$') === -1) esc = prettifyMath(esc);
+  return boldify(esc);
 }
 // For longer prose — paragraphs and lists.
 function mdLite(raw){
   if(!raw) return '';
-  const esc = escapeHtml(fixLatex(raw));
+  let esc = escapeHtml(fixLatex(raw));
+  if(esc.indexOf('$') === -1) esc = prettifyMath(esc);
   const lines = esc.split(/\n/);
   let html = '', listBuf = [], listType = null, paraBuf = [];
   function flushList(){
@@ -1648,8 +1662,9 @@ function sysFor(nodeKey, phase){
   if(phase === 2) t += ANTI_ANCHOR_RULE;
   return t;
 }
+const MATH_REMINDER = "\n\n[수식 규칙 — 반드시 지킬 것] final_answer와 reasoning 안의 모든 수식·기호는 LaTeX로 쓰고 $...$ 로 감싸십시오. sec^3 x 같은 일반 텍스트 수식은 금지합니다. JSON 문자열이므로 백슬래시는 두 번 쓰십시오 (예: $\\int \\sec^3 x\\,dx$).";
 function sysForSupreme(){
-  return isSolve() ? (SUPREME_SYSTEM + SOLVE_SUPREME_ADDENDUM) : SUPREME_SYSTEM;
+  return (isSolve() ? (SUPREME_SYSTEM + SOLVE_SUPREME_ADDENDUM) : SUPREME_SYSTEM) + MATH_REMINDER;
 }
 // Creative temperatures make no sense once every node is doing formal analysis.
 function tempFor(nodeKey){
