@@ -899,7 +899,7 @@
     <div class="save-flash" id="saveFlash">설정 저장됨</div>
   </div>
 
-  <footer class="note">MAGI SYSTEM // TRI-NODE CONSENSUS ENGINE<br><span id="buildTag">BUILD v1.11.1</span></footer>
+  <footer class="note">MAGI SYSTEM // TRI-NODE CONSENSUS ENGINE<br><span id="buildTag">BUILD v1.11.3</span></footer>
 </div>
 
 <script>
@@ -1224,7 +1224,20 @@ function repairJSON(str){
   return out;
 }
 
+// Models often write LaTeX with a single backslash ("\frac", "\Delta", "\circ").
+// Inside JSON that is either an invalid escape (parse fails -> raw blob shown)
+// or a wrong one (\f = form feed, \t = tab). Double those backslashes first.
+function fixJsonEscapes(str){
+  return String(str||'').replace(/\\([\s\S])/g, (m, c, off, all)=>{
+    if(c === '\\' || c === '"' || c === '/') return m;
+    if(c === 'u') return /^[0-9a-fA-F]{4}$/.test(all.substr(off+2,4)) ? m : '\\\\' + c;
+    if('bfnrt'.includes(c)) return /[a-z]/.test(all[off+2] || '') ? '\\\\' + c : m;
+    return '\\\\' + c;
+  });
+}
 function tryParse(str){
+  try{ return JSON.parse(fixJsonEscapes(str)); }catch(e){}
+  try{ return JSON.parse(repairJSON(fixJsonEscapes(str))); }catch(e){}
   try{ return JSON.parse(str); }catch(e){}
   try{ return JSON.parse(looseFix(str)); }catch(e){}
   try{ return JSON.parse(repairJSON(str)); }catch(e){}
@@ -1270,6 +1283,7 @@ function safeParseJSON(text, requiredKeys){
 // Last resort: pull fields out with regex when the JSON will not parse at all,
 // so the user always sees prose instead of a raw blob.
 function unescapeJSONString(v){
+  try{ return JSON.parse('"' + fixJsonEscapes(v).replace(/[\u0000-\u001f]/g, ch=>ch==='\n'?'\\n':' ') + '"'); }catch(e){}
   return String(v||'')
     .replace(/\\n/g,'\n').replace(/\\t/g,' ')
     .replace(/\\"/g,'"').replace(/\\\\/g,'\\');
@@ -1390,6 +1404,14 @@ function normalizeNodeResult(parsed, raw){
   };
 }
 function normalizeFinalResult(parsed, raw){
+  if(!parsed && raw && grabField(raw, ['final_answer'])){
+    const cf = grabNumber(raw, ['confidence']);
+    parsed = {
+      title: grabField(raw, ['title']), query_type: grabField(raw, ['query_type']),
+      verdict: grabField(raw, ['verdict']), final_answer: grabField(raw, ['final_answer']),
+      reasoning: grabField(raw, ['reasoning']), confidence: cf === null ? 50 : cf
+    };
+  }
   const allowed = ['가결','보류','기각'];
   const qt = String(pick(parsed, ['query_type','queryType','유형']) || '').trim().toLowerCase();
   let verdict = String(pick(parsed, ['verdict','판정','결정']) || '').trim();
@@ -3363,6 +3385,7 @@ function newSessionId(){
 function shortTitle(q){
   const t = String(q || '').replace(/\s+/g,' ').trim();
   if(!t) return '제목 없음';
+  if(t === '첨부된 파일을 분석하고 이에 대해 판단하십시오.') return '첨부 파일 분석';
   return t.length > 16 ? t.slice(0,16) + '…' : t;
 }
 async function saveCurrentSession(){
