@@ -462,9 +462,11 @@
   .acct-user-row b{color:var(--green-core); font-weight:400;}
   .sess-list{display:flex; flex-direction:column; gap:5px; max-height:260px; overflow-y:auto;}
   .sess-item{display:flex; gap:5px;}
-  .sess-item.on .sess-open{border-color:var(--green-core);}
+  .sess-item.on .sess-open{border-color:var(--green-dim); background:#03140c; color:var(--green-core);}
+  .sess-open:hover{background:#03140c;}
+  .sess-item .sess-del{opacity:.55;}
   .sess-open{flex:1; min-width:0; display:flex; justify-content:space-between; gap:8px; text-align:left;
-    background:#020a06; border:1px solid var(--green-dim); color:var(--text-main);
+    background:transparent; border:1px solid transparent; color:var(--text-main);
     font-family:var(--font-mono); font-size:11.5px; padding:8px; border-radius:2px; cursor:pointer;}
   .sess-title{overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
   .sess-when{flex-shrink:0; color:var(--text-dim); font-size:10px;}
@@ -897,7 +899,7 @@
     <div class="save-flash" id="saveFlash">설정 저장됨</div>
   </div>
 
-  <footer class="note">MAGI SYSTEM // TRI-NODE CONSENSUS ENGINE<br><span id="buildTag">BUILD v1.11.0</span></footer>
+  <footer class="note">MAGI SYSTEM // TRI-NODE CONSENSUS ENGINE<br><span id="buildTag">BUILD v1.11.1</span></footer>
 </div>
 
 <script>
@@ -955,7 +957,7 @@ const NODES = {
 };
 const NODE_ORDER = ['melchior','balthasar','casper'];
 
-const SUPREME_SYSTEM = "당신은 MAGI 시스템 전체를 지배하는 최상위 통합 판단 AI입니다. 스스로를 'MAGI'라고만 칭합니다.\n\n아래는 세 연산 노드가 독립적으로 사고한 뒤(1차), 서로를 비판하며 정교화한(2차) 최종 결과입니다:\n- MELCHIOR-1: 이론·논리 (도덕성 미고려, 전제가 참일 때 결론이 타당한지 검증)\n- BALTHASAR-2: 감성·도덕 (전제가 참일 때 결론이 옳은지 검증)\n- CASPER-3: 전제·대안 (전제 자체가 완전한지 의심하고, 선택지 밖의 대안을 탐색)\n\n당신의 임무는 어느 한쪽에 치우치지 않고, 각 노드의 신뢰도와 논거의 타당성을 종합적으로 고려하여 최종 결론을 내리는 것입니다. 논리만 따르지도, 감정만 따르지도 않으며, 세 관점을 실제로 통합한 균형잡힌 결론을 도출하십시오. 모든 답변은 한국어로 작성합니다.\n\n반드시 아래 JSON 형식으로만 답하십시오. 그 외의 설명, 마크다운 코드블록은 절대 포함하지 마십시오.\n{\"title\": \"이 대화 전체를 대표하는 짧은 제목 (한국어 명사구, 20자 이내, 수식·기호 없이)\", \"query_type\": \"decision 또는 open 중 하나\", \"verdict\": \"query_type이 decision일 때만 가결/보류/기각 중 하나, open이면 빈 문자열\", \"final_answer\": \"최종 결론 (구체적이고 실행 가능하게, 4~8문장)\", \"reasoning\": \"세 노드의 의견을 어떻게 반영했는지 포함한 판단 근거 (3~6문장)\", \"confidence\": 0에서 100 사이의 정수, \"influence\": {\"melchior\": 정수, \"balthasar\": 정수, \"casper\": 정수}}\n\ninfluence는 최종 결론에 각 노드의 의견이 실제로 반영된 비율입니다. 세 값의 합은 반드시 100이어야 합니다.\n\nquery_type 판별 기준:\n- decision: 찬반, 채택 여부, 실행 여부, 옳고 그름 등 어떤 안건에 대한 가부 판단을 요구하는 질의. 이때만 verdict에 가결/보류/기각을 채웁니다.\n- open: 설명, 분석, 해설, 방법 제시, 비교, 서술형 답변을 요구하는 질의. 이때 verdict는 반드시 빈 문자열로 두십시오. 억지로 가부를 판정하지 마십시오." + NAMING_RULE + LANG_RULE + FORMAT_RULE;
+const SUPREME_SYSTEM = "당신은 MAGI 시스템 전체를 지배하는 최상위 통합 판단 AI입니다. 스스로를 'MAGI'라고만 칭합니다.\n\n아래는 세 연산 노드가 독립적으로 사고한 뒤(1차), 서로를 비판하며 정교화한(2차) 최종 결과입니다:\n- MELCHIOR-1: 이론·논리 (도덕성 미고려, 전제가 참일 때 결론이 타당한지 검증)\n- BALTHASAR-2: 감성·도덕 (전제가 참일 때 결론이 옳은지 검증)\n- CASPER-3: 전제·대안 (전제 자체가 완전한지 의심하고, 선택지 밖의 대안을 탐색)\n\n당신의 임무는 어느 한쪽에 치우치지 않고, 각 노드의 신뢰도와 논거의 타당성을 종합적으로 고려하여 최종 결론을 내리는 것입니다. 논리만 따르지도, 감정만 따르지도 않으며, 세 관점을 실제로 통합한 균형잡힌 결론을 도출하십시오. 모든 답변은 한국어로 작성합니다.\n\n반드시 아래 JSON 형식으로만 답하십시오. 그 외의 설명, 마크다운 코드블록은 절대 포함하지 마십시오.\n{\"title\": \"대화 주제만 뽑은 아주 짧은 제목. 2~4단어, 한국어 12자 이내의 명사구. 질문 문장을 옮기지 말고 주제만 쓰십시오. 수식·기호·따옴표 금지. 예: 적분 계산 풀이, 이직 여부 판단, 중화 적정 농도\", \"query_type\": \"decision 또는 open 중 하나\", \"verdict\": \"query_type이 decision일 때만 가결/보류/기각 중 하나, open이면 빈 문자열\", \"final_answer\": \"최종 결론 (구체적이고 실행 가능하게, 4~8문장)\", \"reasoning\": \"세 노드의 의견을 어떻게 반영했는지 포함한 판단 근거 (3~6문장)\", \"confidence\": 0에서 100 사이의 정수, \"influence\": {\"melchior\": 정수, \"balthasar\": 정수, \"casper\": 정수}}\n\ninfluence는 최종 결론에 각 노드의 의견이 실제로 반영된 비율입니다. 세 값의 합은 반드시 100이어야 합니다.\n\nquery_type 판별 기준:\n- decision: 찬반, 채택 여부, 실행 여부, 옳고 그름 등 어떤 안건에 대한 가부 판단을 요구하는 질의. 이때만 verdict에 가결/보류/기각을 채웁니다.\n- open: 설명, 분석, 해설, 방법 제시, 비교, 서술형 답변을 요구하는 질의. 이때 verdict는 반드시 빈 문자열로 두십시오. 억지로 가부를 판정하지 마십시오." + NAMING_RULE + LANG_RULE + FORMAT_RULE;
 
 /* ---------------------------------------------------------------------
    PROVIDERS
@@ -1396,7 +1398,7 @@ function normalizeFinalResult(parsed, raw){
   if(!isDecision) verdict = '';
   const fa = pick(parsed, ['final_answer','finalAnswer','answer','최종답변']);
   return {
-    title: String(pick(parsed, ['title','제목']) || '').replace(/[*$#`\\]/g,'').replace(/\s+/g,' ').trim().slice(0,40),
+    title: String(pick(parsed, ['title','제목']) || '').replace(/[*$#`\\]/g,'').replace(/["'“”‘’]/g,'').replace(/\s+/g,' ').trim().slice(0,20),
     verdict: verdict,
     final_answer: fa !== undefined ? String(fa) : (raw||'').slice(0,900),
     reasoning: String(pick(parsed, ['reasoning','rationale','근거']) || ''),
@@ -3358,10 +3360,15 @@ function newSessionId(){
     const r = Math.random()*16|0; return (c==='x' ? r : (r&3|8)).toString(16);
   });
 }
+function shortTitle(q){
+  const t = String(q || '').replace(/\s+/g,' ').trim();
+  if(!t) return '제목 없음';
+  return t.length > 16 ? t.slice(0,16) + '…' : t;
+}
 async function saveCurrentSession(){
   if(!sb || !sbUser || !state.history.length) return;
   if(!state.sessionId) state.sessionId = newSessionId();
-  const title = state.title || String(state.history[0].question || '제목 없음').replace(/\s+/g,' ').slice(0,60);
+  const title = state.title || shortTitle(state.history[0].question);
   const { error } = await sb.from('magi_sessions').upsert({
     id: state.sessionId, user_id: sbUser.id, title: title,
     data: { html: roundsContainer.innerHTML, history: state.history, round: state.round, title: state.title || null },
@@ -3382,7 +3389,7 @@ async function loadSessionList(){
       String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
     return '<div class="sess-item' + (r.id === state.sessionId ? ' on' : '') + '">' +
       '<button class="sess-open" data-id="' + r.id + '"><span class="sess-title">' +
-      escapeHtml(r.title || '제목 없음') + '</span><span class="sess-when">' + when + '</span></button>' +
+      escapeHtml(r.title || '제목 없음') + '</span></button>' +
       '<button class="sess-del" data-id="' + r.id + '">삭제</button></div>';
   }).join('');
 }
