@@ -899,7 +899,7 @@
     <div class="save-flash" id="saveFlash">설정 저장됨</div>
   </div>
 
-  <footer class="note">MAGI SYSTEM // TRI-NODE CONSENSUS ENGINE<br><span id="buildTag">BUILD v1.11.3</span></footer>
+  <footer class="note">MAGI SYSTEM // TRI-NODE CONSENSUS ENGINE<br><span id="buildTag">BUILD v1.11.4</span></footer>
 </div>
 
 <script>
@@ -3341,6 +3341,7 @@ function connectSupabase(){
   catch(e){ sb = null; acctMsg('연결 설정이 올바르지 않습니다: ' + e.message, 'var(--red)'); renderAccount(); return; }
   sb.auth.onAuthStateChange((_ev, session)=>{
     sbUser = session ? session.user : null;
+    if(sbUser) acctMsg('');
     renderAccount();
   });
   sb.auth.getSession().then(({data})=>{
@@ -3374,7 +3375,7 @@ async function acctSignOut(){
   state.guest = false;
   if(sb) await sb.auth.signOut();
   state.sessionId = null;
-  acctMsg('로그아웃되었습니다.');
+  acctMsg('');
 }
 function newSessionId(){
   if(window.crypto && crypto.randomUUID) return crypto.randomUUID();
@@ -3470,7 +3471,10 @@ function initAccount(){
   });
   $('acctSignInBtn').addEventListener('click', acctSignIn);
   $('acctSignUpBtn').addEventListener('click', acctSignUp);
-  $('acctSignOutBtn').addEventListener('click', acctSignOut);
+  $('acctSignOutBtn').addEventListener('click', ()=>{
+    closeDrawer();
+    showConfirmBanner('로그아웃할까요?', '※ 저장된 대화는 다시 로그인하면 그대로 볼 수 있습니다', acctSignOut);
+  });
   sessionList.addEventListener('click', (e)=>{
     const openBtn = e.target.closest('.sess-open');
     const delBtn = e.target.closest('.sess-del');
@@ -3675,7 +3679,11 @@ function init(){
   });
   resetBtn.addEventListener('click', ()=>{
     closeDrawer();
-    showConfirmBanner('새 심의를 시작할까요?', '※ 현재 대화 내용이 초기화됩니다', ()=>{ if(!state.busy) resetSession(); });
+    if(state.busy) return;
+    // Logged-in conversations are already saved in the list, so no need to ask.
+    // Guests have no saved copy, so keep the safety prompt for them.
+    if(sbUser || !state.history.length) resetSession();
+    else showConfirmBanner('새 대화를 시작할까요?', '※ 로그인하지 않은 상태라 현재 대화는 저장되지 않고 사라집니다', ()=>{ if(!state.busy) resetSession(); });
   });
   confirmYesBtn.addEventListener('click', ()=>{
     const action = pendingConfirmAction;
